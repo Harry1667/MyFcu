@@ -54,15 +54,20 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-bold">逢甲打卡</h1>
-        {accounts.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setManageMode((m) => !m)}
-            className="text-sm text-zinc-600 underline"
-          >
-            {manageMode ? '完成' : '管理'}
-          </button>
-        )}
+        <div className="flex items-center gap-3 text-sm">
+          <Link href="/logs" className="text-zinc-600 underline">
+            📋 紀錄
+          </Link>
+          {accounts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setManageMode((m) => !m)}
+              className="text-zinc-600 underline"
+            >
+              {manageMode ? '完成' : '管理'}
+            </button>
+          )}
+        </div>
       </header>
 
       <section className="mt-8 flex-1">

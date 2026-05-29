@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { logScanAttempts, type LogEntry } from '@/lib/actions/logs';
 
 type Account = {
   id: string;
@@ -37,7 +38,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       setPhase('processing');
       setResults(accounts.map<Result>((a) => ({ id: a.id, status: 'pending' })));
 
-      await Promise.allSettled(
+      const finalResults = await Promise.allSettled(
         accounts.map(async (acc) => {
           try {
             const body = new URLSearchParams({
@@ -53,17 +54,38 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
             setResults((prev) =>
               prev.map((r) => (r.id === acc.id ? { ...r, status: 'sent' } : r)),
             );
+            return { ok: true as const, acc };
           } catch (e) {
+            const msg = (e as Error).message;
             setResults((prev) =>
               prev.map((r) =>
-                r.id === acc.id
-                  ? { ...r, status: 'failed', error: (e as Error).message }
-                  : r,
+                r.id === acc.id ? { ...r, status: 'failed', error: msg } : r,
               ),
             );
+            return { ok: false as const, acc, error: msg };
           }
         }),
       );
+
+      const logEntries: LogEntry[] = finalResults.flatMap((r) => {
+        if (r.status !== 'fulfilled') return [];
+        const v = r.value;
+        return [
+          {
+            accountId: v.acc.id,
+            displayName: v.acc.displayName,
+            fcuNid: v.acc.fcuNid,
+            status: v.ok ? 'sent' : 'failed',
+            errorMessage: v.ok ? undefined : v.error,
+          },
+        ];
+      });
+      try {
+        await logScanAttempts(token, logEntries);
+      } catch (e) {
+        setError(`寫入紀錄失敗：${(e as Error).message}`);
+      }
+
       setPhase('done');
     },
     [accounts],

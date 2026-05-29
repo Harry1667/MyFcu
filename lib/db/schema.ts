@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, blob } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, blob } from 'drizzle-orm/sqlite-core';
 
 export const fcuAccounts = sqliteTable('fcu_accounts', {
   id: text('id').primaryKey(),
@@ -11,5 +11,22 @@ export const fcuAccounts = sqliteTable('fcu_accounts', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
+export const clockinLogs = sqliteTable(
+  'clockin_logs',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id'),
+    displayName: text('display_name').notNull(),
+    fcuNid: text('fcu_nid').notNull(),
+    token: text('token').notNull(),
+    status: text('status', { enum: ['sent', 'failed'] }).notNull(),
+    errorMessage: text('error_message'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => [index('clockin_logs_created_idx').on(t.createdAt)],
+);
+
 export type FcuAccount = typeof fcuAccounts.$inferSelect;
 export type NewFcuAccount = typeof fcuAccounts.$inferInsert;
+export type ClockinLog = typeof clockinLogs.$inferSelect;
+export type NewClockinLog = typeof clockinLogs.$inferInsert;
