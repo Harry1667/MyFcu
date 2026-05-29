@@ -1,0 +1,1 @@
+ALTER TABLE `clockin_logs` ADD `verify_raw_html` text;

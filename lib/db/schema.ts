@@ -23,6 +23,7 @@ export const clockinLogs = sqliteTable(
     errorMessage: text('error_message'),
     verified: integer('verified', { mode: 'boolean' }),
     verifyMessage: text('verify_message'),
+    verifyRawHtml: text('verify_raw_html'),
     verifyAt: integer('verify_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },

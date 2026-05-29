@@ -15,6 +15,7 @@ export type VerifyResult = {
   verified: boolean;
   message: string;
   htmlSnippet?: string;
+  rawHtml?: string;
 };
 
 function parseHidden(html: string, name: string): string {
@@ -78,6 +79,7 @@ async function fetchAndUpdateLog(
     .set({
       verified: result.verified,
       verifyMessage: result.message,
+      verifyRawHtml: result.rawHtml ?? null,
       verifyAt: new Date(),
     })
     .where(eq(clockinLogs.id, logId));
@@ -206,7 +208,8 @@ async function runVerify(accountId: string): Promise<VerifyResult> {
       return {
         ok: true,
         verified: true,
-        message: `今天頁面上找到 ${count} 次日期字串（含命中：${matched[0]}）`,
+        message: `命中 ${matched[0]}，頁面上共 ${count} 次。HTML 長度 ${recordsHtml.length}`,
+        rawHtml: recordsHtml,
       };
     } else {
       const snippet = recordsHtml
@@ -215,12 +218,15 @@ async function runVerify(accountId: string): Promise<VerifyResult> {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 500);
+        .slice(0, 1200);
       return {
         ok: true,
         verified: false,
-        message: '今天沒在打卡頁找到對應日期字串',
+        message:
+          `今天沒找到日期字串（試過：${patterns.join(', ')}）。HTML 長度 ${recordsHtml.length}。` +
+          `\n--- 頁面文字 snippet (前 1200 字) ---\n${snippet}`,
         htmlSnippet: snippet,
+        rawHtml: recordsHtml,
       };
     }
   } catch (e) {
