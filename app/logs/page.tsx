@@ -31,6 +31,8 @@ export default async function LogsPage() {
       fcuNid: it.fcuNid,
       status: it.status,
       errorMessage: it.errorMessage,
+      verified: it.verified,
+      verifyMessage: it.verifyMessage,
     })),
   }));
 

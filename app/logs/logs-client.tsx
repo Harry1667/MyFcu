@@ -9,6 +9,8 @@ type Item = {
   fcuNid: string;
   status: 'sent' | 'failed';
   errorMessage: string | null;
+  verified: boolean | null;
+  verifyMessage: string | null;
 };
 
 type Session = {
@@ -33,6 +35,19 @@ function timeAgo(d: Date) {
   if (hr < 24) return `${hr} 小時前`;
   const day = Math.floor(hr / 24);
   return `${day} 天前`;
+}
+
+function itemBadge(item: Item) {
+  if (item.status === 'failed') {
+    return { bg: 'bg-red-100', text: 'text-red-700', label: '送出失敗' };
+  }
+  if (item.verified === true) {
+    return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '✓ 已記錄' };
+  }
+  if (item.verified === false) {
+    return { bg: 'bg-amber-100', text: 'text-amber-700', label: '⚠️ 未確認' };
+  }
+  return { bg: 'bg-zinc-100', text: 'text-zinc-600', label: '已送出' };
 }
 
 export function LogsClient({
@@ -75,7 +90,10 @@ export function LogsClient({
 
       <ul className="mt-4 space-y-3">
         {sessions.map((s) => {
-          const sent = s.items.filter((i) => i.status === 'sent').length;
+          const verified = s.items.filter((i) => i.verified === true).length;
+          const unverified = s.items.filter(
+            (i) => i.status === 'sent' && i.verified === false,
+          ).length;
           const failed = s.items.filter((i) => i.status === 'failed').length;
           const isOpen = expanded.has(s.key);
           return (
@@ -94,9 +112,14 @@ export function LogsClient({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {sent > 0 && (
+                  {verified > 0 && (
                     <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                      ✓ {sent}
+                      ✓ {verified}
+                    </span>
+                  )}
+                  {unverified > 0 && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                      ⚠️ {unverified}
                     </span>
                   )}
                   {failed > 0 && (
@@ -115,37 +138,41 @@ export function LogsClient({
                     <div className="mt-1 break-all font-mono text-xs">{s.token}</div>
                   </div>
                   <ul className="space-y-1">
-                    {s.items.map((it) => (
-                      <li
-                        key={it.id}
-                        className="flex items-center gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 text-sm"
-                      >
-                        <span
-                          className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                          style={{ backgroundColor: avatarColor(it.fcuNid) }}
+                    {s.items.map((it) => {
+                      const b = itemBadge(it);
+                      const detail = it.verifyMessage ?? it.errorMessage;
+                      return (
+                        <li
+                          key={it.id}
+                          className="rounded-lg bg-zinc-50 px-2 py-1.5 text-sm"
                         >
-                          {it.displayName.slice(0, 1)}
-                        </span>
-                        <div className="flex-1">
-                          <div className="font-medium">{it.displayName}</div>
-                          <div className="font-mono text-[10px] text-zinc-400">
-                            {it.fcuNid}
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                              style={{ backgroundColor: avatarColor(it.fcuNid) }}
+                            >
+                              {it.displayName.slice(0, 1)}
+                            </span>
+                            <div className="flex-1">
+                              <div className="font-medium">{it.displayName}</div>
+                              <div className="font-mono text-[10px] text-zinc-400">
+                                {it.fcuNid}
+                              </div>
+                            </div>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${b.bg} ${b.text}`}
+                            >
+                              {b.label}
+                            </span>
                           </div>
-                        </div>
-                        {it.status === 'sent' ? (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                            送出
-                          </span>
-                        ) : (
-                          <span
-                            title={it.errorMessage ?? undefined}
-                            className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700"
-                          >
-                            失敗
-                          </span>
-                        )}
-                      </li>
-                    ))}
+                          {detail && (
+                            <div className="mt-1 break-words pl-9 text-[11px] text-zinc-500">
+                              {detail}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

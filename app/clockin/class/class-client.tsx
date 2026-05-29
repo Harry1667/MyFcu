@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { logScanAttempts, type LogEntry } from '@/lib/actions/logs';
+import { verifyAccount } from '@/lib/actions/verify';
 
 type Account = {
   id: string;
@@ -11,8 +12,19 @@ type Account = {
   fcuPassword: string;
 };
 
-type ResultStatus = 'pending' | 'sent' | 'failed';
-type Result = { id: string; status: ResultStatus; error?: string };
+type ResultStatus =
+  | 'pending'
+  | 'sent'
+  | 'failed'
+  | 'verifying'
+  | 'verified'
+  | 'unverified';
+type Result = {
+  id: string;
+  status: ResultStatus;
+  error?: string;
+  verifyMessage?: string;
+};
 type Phase = 'preflight' | 'scan' | 'processing' | 'done';
 type Facing = 'environment' | 'user';
 
@@ -80,10 +92,57 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           },
         ];
       });
+      let logIdMap: Record<string, string> = {};
       try {
-        await logScanAttempts(token, logEntries);
+        logIdMap = await logScanAttempts(token, logEntries);
       } catch (e) {
         setError(`寫入紀錄失敗：${(e as Error).message}`);
+      }
+
+      // Kick off server-side verification for each sent account in parallel.
+      const sentEntries = logEntries.filter((e) => e.status === 'sent');
+      if (sentEntries.length > 0) {
+        setResults((prev) =>
+          prev.map((r) =>
+            sentEntries.some((e) => e.accountId === r.id)
+              ? { ...r, status: 'verifying' }
+              : r,
+          ),
+        );
+
+        await Promise.allSettled(
+          sentEntries.map(async (entry) => {
+            try {
+              const v = await verifyAccount(
+                entry.accountId,
+                logIdMap[entry.accountId] ?? null,
+              );
+              setResults((prev) =>
+                prev.map((r) =>
+                  r.id === entry.accountId
+                    ? {
+                        ...r,
+                        status: v.verified ? 'verified' : 'unverified',
+                        verifyMessage: v.message,
+                      }
+                    : r,
+                ),
+              );
+            } catch (e) {
+              setResults((prev) =>
+                prev.map((r) =>
+                  r.id === entry.accountId
+                    ? {
+                        ...r,
+                        status: 'unverified',
+                        verifyMessage: (e as Error).message,
+                      }
+                    : r,
+                ),
+              );
+            }
+          }),
+        );
       }
 
       setPhase('done');
@@ -256,22 +315,30 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
             {accounts.map((acc) => {
               const r = results.find((x) => x.id === acc.id);
               const status = r?.status ?? 'waiting';
+              const detail = r?.verifyMessage ?? r?.error;
               return (
                 <li
                   key={acc.id}
-                  className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 shadow-sm"
+                  className="rounded-xl bg-white px-3 py-2 shadow-sm"
                 >
-                  <span
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                    style={{ backgroundColor: avatarColor(acc.id) }}
-                  >
-                    {acc.displayName.slice(0, 1)}
-                  </span>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{acc.displayName}</div>
-                    <div className="font-mono text-[10px] text-zinc-400">{acc.fcuNid}</div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: avatarColor(acc.id) }}
+                    >
+                      {acc.displayName.slice(0, 1)}
+                    </span>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{acc.displayName}</div>
+                      <div className="font-mono text-[10px] text-zinc-400">{acc.fcuNid}</div>
+                    </div>
+                    <StatusBadge status={status as ResultStatus | 'waiting'} />
                   </div>
-                  <StatusBadge status={status as ResultStatus | 'waiting'} />
+                  {detail && (status === 'unverified' || status === 'failed') && (
+                    <div className="mt-1 break-words pl-13 text-[11px] text-zinc-500">
+                      {detail}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -281,9 +348,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
       {phase === 'done' && (
         <div className="mt-6 space-y-3">
-          <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            ⚠️ 瀏覽器跨網域讀不到 FCU 回應。請在 FCU app 或網站確認打卡記錄。
-          </div>
+          {results.some((r) => r.status === 'unverified' || r.status === 'failed') && (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              ⚠️ 有未確認 / 失敗的帳號。可以到 <Link href="/logs" className="underline">📋 紀錄</Link> 看詳細，或開 FCU app 自己確認。
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               type="button"
@@ -311,6 +380,9 @@ function StatusBadge({ status }: { status: ResultStatus | 'waiting' }) {
     pending: { bg: 'bg-blue-100', text: 'text-blue-700', label: '傳送中' },
     sent: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '已送出' },
     failed: { bg: 'bg-red-100', text: 'text-red-700', label: '失敗' },
+    verifying: { bg: 'bg-blue-100', text: 'text-blue-700', label: '驗證中…' },
+    verified: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '✓ 已記錄' },
+    unverified: { bg: 'bg-amber-100', text: 'text-amber-700', label: '⚠️ 未確認' },
   };
   const s = map[status];
   return (

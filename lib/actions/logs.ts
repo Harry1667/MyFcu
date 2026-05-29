@@ -13,22 +13,28 @@ export type LogEntry = {
   errorMessage?: string;
 };
 
-export async function logScanAttempts(token: string, entries: LogEntry[]) {
-  if (entries.length === 0) return;
+export async function logScanAttempts(
+  token: string,
+  entries: LogEntry[],
+): Promise<Record<string, string>> {
+  if (entries.length === 0) return {};
   const now = new Date();
-  await db.insert(clockinLogs).values(
-    entries.map((e) => ({
-      id: randomUUID(),
-      accountId: e.accountId,
-      displayName: e.displayName,
-      fcuNid: e.fcuNid,
-      token,
-      status: e.status,
-      errorMessage: e.errorMessage ?? null,
-      createdAt: now,
-    })),
-  );
+  const rows = entries.map((e) => ({
+    id: randomUUID(),
+    accountId: e.accountId,
+    displayName: e.displayName,
+    fcuNid: e.fcuNid,
+    token,
+    status: e.status,
+    errorMessage: e.errorMessage ?? null,
+    verified: null,
+    verifyMessage: null,
+    verifyAt: null,
+    createdAt: now,
+  }));
+  await db.insert(clockinLogs).values(rows);
   revalidatePath('/logs');
+  return Object.fromEntries(rows.map((r) => [r.accountId, r.id]));
 }
 
 export async function clearLogs() {
