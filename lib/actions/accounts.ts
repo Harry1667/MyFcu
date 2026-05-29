@@ -3,13 +3,13 @@
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { fcuAccounts } from '@/lib/db/schema';
 import { encryptCredential } from '@/lib/crypto/encryption';
-import { requireSession } from '@/lib/auth-helpers';
-import type { FormState } from '@/lib/actions/auth';
+
+export type FormState = { ok: boolean; error?: string } | null;
 
 const addSchema = z.object({
   displayName: z.string().min(1, '請輸入顯示名稱').max(30),
@@ -18,8 +18,6 @@ const addSchema = z.object({
 });
 
 export async function addFcuAccount(_prev: FormState, formData: FormData): Promise<FormState> {
-  const session = await requireSession();
-
   const parsed = addSchema.safeParse({
     displayName: formData.get('displayName'),
     fcuNid: formData.get('fcuNid'),
@@ -30,23 +28,21 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
   }
   const { displayName, fcuNid, fcuPassword } = parsed.data;
 
-  const enc = encryptCredential(session.masterKey, fcuPassword);
+  const enc = encryptCredential(fcuPassword);
 
-  const maxOrder = await db
+  const existing = await db
     .select({ s: fcuAccounts.sortOrder })
     .from(fcuAccounts)
-    .where(eq(fcuAccounts.userId, session.userId))
     .orderBy(asc(fcuAccounts.sortOrder));
 
   await db.insert(fcuAccounts).values({
     id: randomUUID(),
-    userId: session.userId,
     displayName,
     fcuNid: fcuNid.toUpperCase(),
     nonce: enc.nonce,
     ciphertext: enc.ciphertext,
     authTag: enc.authTag,
-    sortOrder: maxOrder.length,
+    sortOrder: existing.length,
     createdAt: new Date(),
   });
 
@@ -55,9 +51,6 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
 }
 
 export async function deleteFcuAccount(id: string) {
-  const session = await requireSession();
-  await db
-    .delete(fcuAccounts)
-    .where(and(eq(fcuAccounts.id, id), eq(fcuAccounts.userId, session.userId)));
+  await db.delete(fcuAccounts).where(eq(fcuAccounts.id, id));
   revalidatePath('/');
 }

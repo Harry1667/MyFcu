@@ -1,36 +1,15 @@
-import { hash, hashRaw, verify } from '@node-rs/argon2';
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
-const ARGON2_OPTIONS = {
-  algorithm: 2,
-  timeCost: 3,
-  memoryCost: 65536,
-  parallelism: 1,
-} as const;
+let cachedKey: Buffer | null = null;
 
-export async function hashPassword(password: string): Promise<string> {
-  return hash(password, ARGON2_OPTIONS);
-}
-
-export async function verifyPassword(hashStr: string, password: string): Promise<boolean> {
-  try {
-    return await verify(hashStr, password);
-  } catch {
-    return false;
+export function getServerMasterKey(): Buffer {
+  if (cachedKey) return cachedKey;
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error('AUTH_SECRET env not set — cannot derive encryption key');
   }
-}
-
-export function generateKdfSalt(): Buffer {
-  return randomBytes(16);
-}
-
-export async function deriveMasterKey(password: string, salt: Buffer): Promise<Buffer> {
-  const out = await hashRaw(password, {
-    ...ARGON2_OPTIONS,
-    salt,
-    outputLen: 32,
-  });
-  return Buffer.from(out);
+  cachedKey = createHash('sha256').update(secret, 'utf8').digest();
+  return cachedKey;
 }
 
 export interface EncryptedCredential {
@@ -39,27 +18,22 @@ export interface EncryptedCredential {
   authTag: Buffer;
 }
 
-export function encryptCredential(masterKey: Buffer, plaintext: string): EncryptedCredential {
-  if (masterKey.length !== 32) {
-    throw new Error(`masterKey must be 32 bytes, got ${masterKey.length}`);
-  }
+export function encryptCredential(plaintext: string): EncryptedCredential {
+  const key = getServerMasterKey();
   const nonce = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', masterKey, nonce);
+  const cipher = createCipheriv('aes-256-gcm', key, nonce);
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return { nonce, ciphertext, authTag };
 }
 
 export function decryptCredential(
-  masterKey: Buffer,
   nonce: Buffer,
   ciphertext: Buffer,
   authTag: Buffer,
 ): string {
-  if (masterKey.length !== 32) {
-    throw new Error(`masterKey must be 32 bytes, got ${masterKey.length}`);
-  }
-  const decipher = createDecipheriv('aes-256-gcm', masterKey, nonce);
+  const key = getServerMasterKey();
+  const decipher = createDecipheriv('aes-256-gcm', key, nonce);
   decipher.setAuthTag(authTag);
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return plaintext.toString('utf8');

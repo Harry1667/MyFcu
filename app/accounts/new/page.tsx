@@ -2,8 +2,7 @@
 
 import { useActionState } from 'react';
 import Link from 'next/link';
-import { addFcuAccount } from '@/lib/actions/accounts';
-import type { FormState } from '@/lib/actions/auth';
+import { addFcuAccount, type FormState } from '@/lib/actions/accounts';
 
 export default function NewAccountPage() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(addFcuAccount, null);
@@ -18,10 +17,6 @@ export default function NewAccountPage() {
       </header>
 
       <form action={formAction} className="mt-6 space-y-4">
-        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          ⚠️ FCU 密碼將以 AES-256-GCM 加密儲存。資料庫單獨被偷無法解密 — 解密金鑰由你的 WebApp 密碼衍生。
-        </div>
-
         <label className="block">
           <span className="text-sm font-medium text-zinc-700">顯示名稱</span>
           <input
