@@ -11,7 +11,7 @@ type Account = {
 };
 
 type ResultStatus = 'pending' | 'sent' | 'failed';
-type Result = { id: string; status: ResultStatus };
+type Result = { id: string; status: ResultStatus; error?: string };
 type Phase = 'preflight' | 'scan' | 'processing' | 'done';
 type Facing = 'environment' | 'user';
 
@@ -28,16 +28,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [results, setResults] = useState<Result[]>([]);
   const [facing, setFacing] = useState<Facing>('environment');
   const [error, setError] = useState<string | null>(null);
+  const [scannedToken, setScannedToken] = useState<string | null>(null);
   const scannerRef = useRef<import('html5-qrcode').Html5Qrcode | null>(null);
   const handledRef = useRef(false);
 
-  const handleToken = useCallback(
+  const postToFcu = useCallback(
     async (token: string) => {
-      try {
-        await scannerRef.current?.stop();
-      } catch {
-        /* ignore */
-      }
       setPhase('processing');
       setResults(accounts.map<Result>((a) => ({ id: a.id, status: 'pending' })));
 
@@ -49,13 +45,21 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
               password: acc.fcuPassword,
               token,
             });
-            await fetch(QR_ENDPOINT, { method: 'POST', mode: 'no-cors', body });
+            await fetch(QR_ENDPOINT, {
+              method: 'POST',
+              mode: 'no-cors',
+              body,
+            });
             setResults((prev) =>
               prev.map((r) => (r.id === acc.id ? { ...r, status: 'sent' } : r)),
             );
-          } catch {
+          } catch (e) {
             setResults((prev) =>
-              prev.map((r) => (r.id === acc.id ? { ...r, status: 'failed' } : r)),
+              prev.map((r) =>
+                r.id === acc.id
+                  ? { ...r, status: 'failed', error: (e as Error).message }
+                  : r,
+              ),
             );
           }
         }),
@@ -65,6 +69,34 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     [accounts],
   );
 
+  // When scannedToken is set, stop scanner then post.
+  useEffect(() => {
+    if (!scannedToken) return;
+    void (async () => {
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      if (s) {
+        try {
+          await s.stop();
+        } catch {
+          /* ignore */
+        }
+        try {
+          await s.clear();
+        } catch {
+          /* ignore */
+        }
+      }
+      try {
+        await postToFcu(scannedToken);
+      } catch (e) {
+        setError(`POST failed: ${(e as Error).message}`);
+        setPhase('done');
+      }
+    })();
+  }, [scannedToken, postToFcu]);
+
+  // Start scanner whenever phase === 'scan' (and on facing change while scanning).
   useEffect(() => {
     if (phase !== 'scan') return;
     let cancelled = false;
@@ -81,20 +113,21 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           (decoded) => {
             if (handledRef.current) return;
             handledRef.current = true;
-            void handleToken(decoded);
+            setScannedToken(decoded);
           },
           () => {},
         );
-        if (cancelled) {
-          try {
-            await scanner.stop();
-          } catch {
-            /* ignore */
-          }
-        }
       } catch (e) {
-        setError((e as Error).message || '無法開啟相機');
-        setPhase('preflight');
+        if (!cancelled) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : typeof e === 'string'
+                ? e
+                : '無法開啟相機';
+          setError(msg);
+          setPhase('preflight');
+        }
       }
     })();
 
@@ -104,15 +137,22 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       scannerRef.current = null;
       if (s) {
         s.stop()
-          .then(() => s.clear())
+          .then(() => {
+            try {
+              s.clear();
+            } catch {
+              /* ignore */
+            }
+          })
           .catch(() => {});
       }
     };
-  }, [phase, facing, handleToken]);
+  }, [phase, facing]);
 
   const startCamera = () => {
     setError(null);
     handledRef.current = false;
+    setScannedToken(null);
     setPhase('scan');
   };
 
@@ -122,7 +162,9 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
   const rescan = () => {
     handledRef.current = false;
+    setScannedToken(null);
     setResults([]);
+    setError(null);
     setPhase('preflight');
   };
 
@@ -136,8 +178,31 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       </header>
 
       <p className="mt-2 text-sm text-zinc-500">
-        對準老師螢幕的 QR code，會自動為以下 {accounts.length} 個帳號送出打卡。
+        對準老師螢幕的 QR，自動為 {accounts.length} 個帳號送出打卡。
       </p>
+
+      {error && (
+        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Scanner div is always mounted; only visible during scan phase. */}
+      <div className={phase === 'scan' ? 'mt-4' : 'hidden'}>
+        <div
+          id="qr-reader"
+          className="overflow-hidden rounded-2xl bg-black"
+        />
+        <div className="mt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={switchCamera}
+            className="rounded-full bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm hover:bg-zinc-100"
+          >
+            🔄 切換鏡頭（目前 {facing === 'environment' ? '後' : '前'} 鏡頭）
+          </button>
+        </div>
+      </div>
 
       {phase === 'preflight' && (
         <div className="mt-6 space-y-3">
@@ -145,9 +210,6 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
             📷
             <div className="mt-2 text-sm">需要使用相機</div>
           </div>
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-          )}
           <button
             type="button"
             onClick={startCamera}
@@ -158,49 +220,41 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         </div>
       )}
 
-      {phase === 'scan' && (
-        <div className="mt-4">
-          <div
-            id="qr-reader"
-            className="overflow-hidden rounded-2xl bg-black [&_video]:w-full [&_video]:object-cover"
-          />
-          <div className="mt-2 flex justify-center">
-            <button
-              type="button"
-              onClick={switchCamera}
-              className="rounded-full bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm hover:bg-zinc-100"
-            >
-              🔄 切換鏡頭（目前 {facing === 'environment' ? '後' : '前'} 鏡頭）
-            </button>
-          </div>
-        </div>
-      )}
-
-      {phase !== 'preflight' && (
-        <ul className="mt-4 space-y-2">
-          {accounts.map((acc) => {
-            const r = results.find((x) => x.id === acc.id);
-            const status = r?.status ?? 'waiting';
-            return (
-              <li
-                key={acc.id}
-                className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 shadow-sm"
-              >
-                <span
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ backgroundColor: avatarColor(acc.id) }}
+      {phase !== 'preflight' && phase !== 'scan' && (
+        <>
+          {scannedToken && (
+            <div className="mt-4 rounded-lg bg-zinc-100 px-3 py-2 text-xs">
+              <span className="text-zinc-500">QR：</span>
+              <span className="ml-2 font-mono break-all">
+                {scannedToken.length > 60 ? `${scannedToken.slice(0, 60)}…` : scannedToken}
+              </span>
+            </div>
+          )}
+          <ul className="mt-4 space-y-2">
+            {accounts.map((acc) => {
+              const r = results.find((x) => x.id === acc.id);
+              const status = r?.status ?? 'waiting';
+              return (
+                <li
+                  key={acc.id}
+                  className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 shadow-sm"
                 >
-                  {acc.displayName.slice(0, 1)}
-                </span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{acc.displayName}</div>
-                  <div className="font-mono text-[10px] text-zinc-400">{acc.fcuNid}</div>
-                </div>
-                <StatusBadge status={status as ResultStatus | 'waiting'} />
-              </li>
-            );
-          })}
-        </ul>
+                  <span
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                    style={{ backgroundColor: avatarColor(acc.id) }}
+                  >
+                    {acc.displayName.slice(0, 1)}
+                  </span>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{acc.displayName}</div>
+                    <div className="font-mono text-[10px] text-zinc-400">{acc.fcuNid}</div>
+                  </div>
+                  <StatusBadge status={status as ResultStatus | 'waiting'} />
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {phase === 'done' && (
