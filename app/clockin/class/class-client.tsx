@@ -299,20 +299,20 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">掃 QR 打卡</h1>
-        <Link href="/" className="text-sm text-zinc-600 underline">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <header className="flex items-center justify-between pt-2">
+        <h1 className="text-[17px] font-semibold text-[--label]">掃 QR 打卡</h1>
+        <Link href="/" className="text-[17px] text-[--tint]">
           取消
         </Link>
       </header>
 
-      <p className="mt-2 text-sm text-zinc-500">
+      <p className="mt-3 text-[15px] text-[--label-2]">
         對準老師螢幕的 QR，自動為 {accounts.length} 個帳號送出打卡。
       </p>
 
       {error && (
-        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
           ⚠️ {error}
         </div>
       )}
@@ -323,11 +323,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           id="qr-reader"
           className="overflow-hidden rounded-2xl bg-black"
         />
-        <div className="mt-2 flex justify-center">
+        <div className="mt-3 flex justify-center">
           <button
             type="button"
             onClick={switchCamera}
-            className="rounded-full bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm hover:bg-zinc-100"
+            className="rounded-full bg-[--fill] px-4 py-2 text-[14px] font-medium text-[--label] active:opacity-70"
           >
             🔄 切換鏡頭（目前 {facing === 'environment' ? '後' : '前'} 鏡頭）
           </button>
@@ -340,7 +340,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {/* Fallbacks for when live scanning off a screen won't lock on. */}
       {(phase === 'preflight' || phase === 'scan') && (
         <div className="mt-4 space-y-2">
-          <label className="block w-full cursor-pointer rounded-2xl border border-zinc-300 bg-white py-3 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+          <label className="ios-card block w-full cursor-pointer py-3 text-center text-[15px] font-medium text-[--tint] active:opacity-70">
             📸 改用拍照辨識
             <input
               type="file"
@@ -359,24 +359,24 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
             <button
               type="button"
               onClick={() => setManualOpen(true)}
-              className="w-full text-center text-xs text-zinc-400 underline"
+              className="w-full py-1 text-center text-[13px] text-[--label-2]"
             >
               掃不到？手動貼上 QR 內容
             </button>
           ) : (
-            <div className="space-y-2 rounded-2xl border border-zinc-200 bg-white p-3">
+            <div className="ios-card space-y-2 p-3">
               <textarea
                 value={manualValue}
                 onChange={(e) => setManualValue(e.target.value)}
                 rows={3}
                 placeholder="用手機相機掃 QR 後，貼上掃到的文字…"
-                className="w-full resize-none rounded-lg border border-zinc-300 px-2 py-1.5 font-mono text-xs"
+                className="w-full resize-none rounded-lg bg-[--fill] px-3 py-2 font-mono text-[13px] text-[--label] outline-none placeholder:text-[--label-3]"
               />
               <button
                 type="button"
                 onClick={submitManual}
                 disabled={!manualValue.trim()}
-                className="w-full rounded-lg bg-emerald-500 py-2 text-sm font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-400"
+                className="ios-btn"
               >
                 送出打卡
               </button>
@@ -387,15 +387,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
       {phase === 'preflight' && (
         <div className="mt-6 space-y-3">
-          <div className="rounded-2xl border-2 border-dashed border-zinc-300 p-12 text-center text-zinc-500">
-            📷
-            <div className="mt-2 text-sm">需要使用相機</div>
+          <div className="ios-card flex flex-col items-center gap-2 py-14 text-[--label-2]">
+            <span className="text-4xl">📷</span>
+            <div className="text-[15px]">需要使用相機</div>
           </div>
-          <button
-            type="button"
-            onClick={startCamera}
-            className="w-full rounded-2xl bg-emerald-500 py-4 text-lg font-semibold text-white shadow-sm hover:bg-emerald-600"
-          >
+          <button type="button" onClick={startCamera} className="ios-btn">
             啟用相機
           </button>
         </div>
@@ -404,38 +400,36 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {phase !== 'preflight' && phase !== 'scan' && (
         <>
           {scannedToken && (
-            <div className="mt-4 rounded-lg bg-zinc-100 px-3 py-2 text-xs">
-              <span className="text-zinc-500">QR：</span>
-              <span className="ml-2 font-mono break-all">
+            <div className="mt-4 rounded-xl bg-[--fill] px-3 py-2 text-[12px]">
+              <span className="text-[--label-2]">QR：</span>
+              <span className="ml-2 font-mono break-all text-[--label]">
                 {scannedToken.length > 60 ? `${scannedToken.slice(0, 60)}…` : scannedToken}
               </span>
             </div>
           )}
-          <ul className="mt-4 space-y-2">
-            {accounts.map((acc) => {
+          <ul className="ios-card mt-4">
+            {accounts.map((acc, i) => {
               const r = results.find((x) => x.id === acc.id);
               const status = r?.status ?? 'waiting';
               const detail = r?.verifyMessage ?? r?.error;
               return (
-                <li
-                  key={acc.id}
-                  className="rounded-xl bg-white px-3 py-2 shadow-sm"
-                >
+                <li key={acc.id} className="relative px-3 py-2.5">
+                  {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[56px]" />}
                   <div className="flex items-center gap-3">
                     <span
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
                       style={{ backgroundColor: avatarColor(acc.id) }}
                     >
                       {acc.displayName.slice(0, 1)}
                     </span>
                     <div className="flex-1">
-                      <div className="text-sm font-medium">{acc.displayName}</div>
-                      <div className="font-mono text-[10px] text-zinc-400">{acc.fcuNid}</div>
+                      <div className="text-[15px] text-[--label]">{acc.displayName}</div>
+                      <div className="font-mono text-[10px] text-[--label-2]">{acc.fcuNid}</div>
                     </div>
                     <StatusBadge status={status as ResultStatus | 'waiting'} />
                   </div>
                   {detail && (status === 'unverified' || status === 'failed') && (
-                    <div className="mt-1 break-words pl-13 text-[11px] text-zinc-500">
+                    <div className="mt-1 break-words pl-[52px] text-[11px] text-[--label-2]">
                       {detail}
                     </div>
                   )}
@@ -449,22 +443,19 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {phase === 'done' && (
         <div className="mt-6 space-y-3">
           {results.some((r) => r.status === 'unverified' || r.status === 'failed') && (
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              ⚠️ 有未確認 / 失敗的帳號。可以到 <Link href="/logs" className="underline">📋 紀錄</Link> 看詳細，或開 FCU app 自己確認。
+            <div className="rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label-2]">
+              ⚠️ 有未確認 / 失敗的帳號。可以到 <Link href="/logs" className="font-medium text-[--tint]">紀錄</Link> 看詳細，或開 FCU app 自己確認。
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={rescan}
-              className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 font-medium"
+              className="ios-btn-secondary flex-1"
             >
               再掃一次
             </button>
-            <Link
-              href="/"
-              className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-center font-medium text-white"
-            >
+            <Link href="/" className="ios-btn flex-1 text-center">
               回首頁
             </Link>
           </div>
@@ -475,18 +466,21 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 }
 
 function StatusBadge({ status }: { status: ResultStatus | 'waiting' }) {
-  const map: Record<ResultStatus | 'waiting', { bg: string; text: string; label: string }> = {
-    waiting: { bg: 'bg-zinc-100', text: 'text-zinc-500', label: '等待' },
-    pending: { bg: 'bg-blue-100', text: 'text-blue-700', label: '傳送中' },
-    sent: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '已送出' },
-    failed: { bg: 'bg-red-100', text: 'text-red-700', label: '失敗' },
-    verifying: { bg: 'bg-blue-100', text: 'text-blue-700', label: '驗證中…' },
-    verified: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: '✓ 已記錄' },
-    unverified: { bg: 'bg-amber-100', text: 'text-amber-700', label: '⚠️ 未確認' },
+  const map: Record<ResultStatus | 'waiting', { color: string; label: string }> = {
+    waiting: { color: 'var(--label-2)', label: '等待' },
+    pending: { color: '#0a84ff', label: '傳送中' },
+    sent: { color: 'var(--tint)', label: '已送出' },
+    failed: { color: 'var(--danger)', label: '失敗' },
+    verifying: { color: '#0a84ff', label: '驗證中…' },
+    verified: { color: 'var(--tint)', label: '✓ 已記錄' },
+    unverified: { color: 'var(--amber)', label: '⚠️ 未確認' },
   };
   const s = map[status];
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}>
+    <span
+      className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+      style={{ color: s.color, backgroundColor: `color-mix(in srgb, ${s.color} 14%, transparent)` }}
+    >
       {s.label}
     </span>
   );

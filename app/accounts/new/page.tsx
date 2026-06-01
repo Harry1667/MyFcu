@@ -8,61 +8,81 @@ export default function NewAccountPage() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(addFcuAccount, null);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">新增 FCU 帳號</h1>
-        <Link href="/" className="text-sm text-zinc-600 underline">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <header className="pt-2">
+        <Link href="/" className="-ml-1 flex w-fit items-center text-[17px] text-[--tint]">
+          <svg width="11" height="18" viewBox="0 0 11 18" fill="none" className="mr-0.5">
+            <path
+              d="M9 1.5L2 9l7 7.5"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
           取消
         </Link>
+        <h1 className="ios-title mt-2">新增帳號</h1>
       </header>
 
-      <form action={formAction} className="mt-6 space-y-4">
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">顯示名稱</span>
+      <form action={formAction} className="mt-6 space-y-6">
+        <div className="space-y-1.5">
+          <label htmlFor="displayName" className="ios-section block">
+            顯示名稱
+          </label>
           <input
+            id="displayName"
             type="text"
             name="displayName"
             required
             maxLength={30}
             placeholder="例：華柏翰"
-            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none"
+            className="ios-input"
           />
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">FCU 學號（NID）</span>
+        <div className="space-y-1.5">
+          <label htmlFor="fcuNid" className="ios-section block">
+            FCU 學號（NID）
+          </label>
           <input
+            id="fcuNid"
             type="text"
             name="fcuNid"
             required
             pattern="[A-Za-z][0-9]{7}"
             placeholder="例：D1363482"
             autoCapitalize="characters"
-            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-mono focus:border-zinc-900 focus:outline-none"
+            className="ios-input font-mono"
           />
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">FCU 密碼</span>
+        <div className="space-y-1.5">
+          <label htmlFor="fcuPassword" className="ios-section block">
+            FCU 密碼
+          </label>
           <input
+            id="fcuPassword"
             type="password"
             name="fcuPassword"
             required
             autoComplete="off"
-            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none"
+            placeholder="••••••••"
+            className="ios-input"
           />
-        </label>
+          <p className="px-4 pt-1 text-[12px] text-[--label-3]">
+            密碼以 AES-256 加密儲存於伺服器，僅用於代為登入 FCU。
+          </p>
+        </div>
 
         {state?.error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
+          <p className="rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
+            {state.error}
+          </p>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {pending ? '儲存中...' : '儲存'}
+        <button type="submit" disabled={pending} className="ios-btn">
+          {pending ? '儲存中…' : '儲存'}
         </button>
       </form>
     </main>

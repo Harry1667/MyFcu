@@ -9,7 +9,7 @@ type Account = { id: string; displayName: string; fcuNid: string };
 function avatarColor(seed: string) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 60% 55%)`;
+  return `hsl(${h % 360} 58% 52%)`;
 }
 
 export function DashboardClient({ accounts }: { accounts: Account[] }) {
@@ -26,11 +26,8 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
   };
 
   const selectAll = () => {
-    if (selected.size === accounts.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(accounts.map((a) => a.id)));
-    }
+    if (selected.size === accounts.length) setSelected(new Set());
+    else setSelected(new Set(accounts.map((a) => a.id)));
   };
 
   const handleDelete = (acc: Account) => {
@@ -51,119 +48,167 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
   const startDisabled = selectedIds.length === 0 || manageMode;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">逢甲打卡</h1>
-        <div className="flex items-center gap-3 text-sm">
-          <Link href="/logs" className="text-zinc-600 underline">
-            📋 紀錄
-          </Link>
+    <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
+      <header className="flex items-end justify-between pt-3">
+        <h1 className="ios-title">逢甲打卡</h1>
+        <div className="flex items-center gap-4 pb-1 text-[15px] text-[--tint]">
+          <Link href="/logs">紀錄</Link>
           {accounts.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setManageMode((m) => !m)}
-              className="text-zinc-600 underline"
-            >
-              {manageMode ? '完成' : '管理'}
+            <button type="button" onClick={() => setManageMode((m) => !m)} className="font-medium">
+              {manageMode ? '完成' : '編輯'}
             </button>
           )}
         </div>
       </header>
 
-      <section className="mt-8 flex-1">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-zinc-700">
-            選擇要打卡的帳號
-            {accounts.length > 1 && !manageMode && (
-              <button
-                type="button"
-                onClick={selectAll}
-                className="ml-3 text-xs font-normal text-zinc-500 underline"
-              >
-                {selected.size === accounts.length ? '全部取消' : '全選'}
-              </button>
-            )}
-          </h2>
-          <Link href="/accounts/new" className="text-sm text-zinc-600 underline">
-            ＋ 新增
-          </Link>
+      <section className="mt-7 flex-1">
+        <div className="ios-section flex items-end justify-between">
+          <span>{manageMode ? '管理帳號' : '選擇要打卡的帳號'}</span>
+          {accounts.length > 1 && !manageMode && (
+            <button type="button" onClick={selectAll} className="text-[--tint]">
+              {selected.size === accounts.length ? '全部取消' : '全選'}
+            </button>
+          )}
         </div>
 
         {accounts.length === 0 ? (
           <Link
             href="/accounts/new"
-            className="mt-4 block rounded-2xl border-2 border-dashed border-zinc-300 p-12 text-center text-zinc-500 hover:border-zinc-400"
+            className="ios-card flex items-center justify-center gap-2 px-4 py-8 text-[17px] text-[--tint]"
           >
             ＋ 新增第一個 FCU 帳號
           </Link>
         ) : (
-          <ul className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {accounts.map((a) => {
-              const isSel = selected.has(a.id);
-              return (
-                <li key={a.id} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => toggle(a.id)}
-                    disabled={manageMode}
-                    className={`group flex w-full flex-col items-center gap-1 rounded-2xl border-2 p-3 transition ${
-                      isSel
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-transparent bg-white hover:border-zinc-200'
-                    } ${manageMode ? 'opacity-60' : ''}`}
-                  >
-                    <span
-                      className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white"
-                      style={{ backgroundColor: avatarColor(a.id) }}
-                    >
-                      {a.displayName.slice(0, 1)}
-                    </span>
-                    <span className="line-clamp-1 text-sm font-medium">{a.displayName}</span>
-                    <span className="font-mono text-[10px] text-zinc-400">{a.fcuNid}</span>
-                  </button>
-                  {manageMode ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(a)}
-                      disabled={pending}
-                      aria-label={`刪除 ${a.displayName}`}
-                      className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow"
-                    >
-                      ✕
-                    </button>
-                  ) : (
-                    <Link
-                      href={`/account/${a.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`${a.displayName} 的功能（課表 / 學生證 / 請假）`}
-                      className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-bold text-zinc-500 shadow ring-1 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-800"
-                    >
-                      ›
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="ios-card">
+              {accounts.map((a, i) => {
+                const isSel = selected.has(a.id);
+                return (
+                  <li key={a.id} className="relative flex items-center">
+                    {i > 0 && (
+                      <span className="ios-divider absolute top-0 right-0 left-[60px]" />
+                    )}
+                    {manageMode ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(a)}
+                        disabled={pending}
+                        aria-label={`刪除 ${a.displayName}`}
+                        className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[--danger] text-sm font-bold text-white">
+                          −
+                        </span>
+                        <Avatar acc={a} />
+                        <Name acc={a} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => toggle(a.id)}
+                        className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+                      >
+                        <span
+                          className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 text-white transition"
+                          style={{
+                            borderColor: isSel ? 'var(--tint)' : 'var(--label-3)',
+                            backgroundColor: isSel ? 'var(--tint)' : 'transparent',
+                          }}
+                        >
+                          {isSel && (
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path
+                                d="M2.5 6.2l2.2 2.2L9.5 3.6"
+                                stroke="white"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          )}
+                        </span>
+                        <Avatar acc={a} />
+                        <Name acc={a} />
+                      </button>
+                    )}
+                    {!manageMode && (
+                      <Link
+                        href={`/account/${a.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`${a.displayName} 的功能`}
+                        className="flex items-center self-stretch pr-4 pl-2 text-[--label-3] active:bg-[--fill]"
+                      >
+                        <Chevron />
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {!manageMode && (
+              <Link
+                href="/accounts/new"
+                className="ios-card mt-4 flex items-center gap-2 px-4 py-3 text-[17px] text-[--tint]"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-lg leading-none text-white">
+                  ＋
+                </span>
+                新增帳號
+              </Link>
+            )}
+          </>
         )}
       </section>
 
       {accounts.length > 0 && (
-        <div className="pt-6">
+        <div className="sticky bottom-0 pt-4">
           <Link
             href={startHref}
             aria-disabled={startDisabled}
             tabIndex={startDisabled ? -1 : 0}
-            className={`block w-full rounded-2xl py-4 text-center text-lg font-semibold ${
-              startDisabled
-                ? 'pointer-events-none bg-zinc-200 text-zinc-400'
-                : 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-600'
+            className={`ios-btn block text-center ${
+              startDisabled ? 'pointer-events-none opacity-40' : ''
             }`}
           >
-            ▶ 掃 QR 打卡{selectedIds.length > 0 && `（${selectedIds.length}）`}
+            掃 QR 打卡{selectedIds.length > 0 && `（${selectedIds.length}）`}
           </Link>
         </div>
       )}
     </div>
+  );
+}
+
+function Avatar({ acc }: { acc: Account }) {
+  return (
+    <span
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-semibold text-white"
+      style={{ backgroundColor: avatarColor(acc.id) }}
+    >
+      {acc.displayName.slice(0, 1)}
+    </span>
+  );
+}
+
+function Name({ acc }: { acc: Account }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-[17px] text-[--label]">{acc.displayName}</span>
+      <span className="block font-mono text-[12px] text-[--label-2]">{acc.fcuNid}</span>
+    </span>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg width="9" height="15" viewBox="0 0 9 15" fill="none" aria-hidden>
+      <path
+        d="M1.5 1.5L7 7.5l-5.5 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
