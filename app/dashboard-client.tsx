@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { deleteFcuAccount } from '@/lib/actions/accounts';
 
 type Account = { id: string; displayName: string; fcuNid: string };
+type Group = { id: string; name: string; memberIds: string[] };
 
 function avatarColor(seed: string) {
   let h = 0;
@@ -12,7 +13,13 @@ function avatarColor(seed: string) {
   return `hsl(${h % 360} 58% 52%)`;
 }
 
-export function DashboardClient({ accounts }: { accounts: Account[] }) {
+export function DashboardClient({
+  accounts,
+  groups,
+}: {
+  accounts: Account[];
+  groups: Group[];
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manageMode, setManageMode] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -28,6 +35,17 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
   const selectAll = () => {
     if (selected.size === accounts.length) setSelected(new Set());
     else setSelected(new Set(accounts.map((a) => a.id)));
+  };
+
+  // A group's members, minus any deleted accounts.
+  const liveMembers = (g: Group) => g.memberIds.filter((id) => accounts.some((a) => a.id === id));
+  const isGroupActive = (g: Group) => {
+    const m = liveMembers(g);
+    return m.length > 0 && m.length === selected.size && m.every((id) => selected.has(id));
+  };
+  const selectGroup = (g: Group) => {
+    if (manageMode) return;
+    setSelected(isGroupActive(g) ? new Set() : new Set(liveMembers(g)));
   };
 
   const handleDelete = (acc: Account) => {
@@ -61,7 +79,49 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
         </div>
       </header>
 
-      <section className="mt-7 flex-1">
+      {accounts.length > 0 && !manageMode && (
+        <section className="mt-6">
+          <div className="ios-section flex items-end justify-between">
+            <span>課程群組</span>
+            <Link href="/groups" className="text-[--tint]">
+              管理
+            </Link>
+          </div>
+          {groups.length === 0 ? (
+            <Link
+              href="/groups"
+              className="ios-card flex items-center gap-2 px-4 py-3 text-[15px] text-[--tint]"
+            >
+              ＋ 建立課程群組，一鍵選取整組同學
+            </Link>
+          ) : (
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              {groups.map((g) => {
+                const active = isGroupActive(g);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => selectGroup(g)}
+                    className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
+                    style={{
+                      backgroundColor: active ? 'var(--tint)' : 'var(--bg-elevated)',
+                      color: active ? '#fff' : 'var(--label)',
+                    }}
+                  >
+                    {g.name}
+                    <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-[--label-3]'}>
+                      {liveMembers(g).length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="mt-6 flex-1">
         <div className="ios-section flex items-end justify-between">
           <span>{manageMode ? '管理帳號' : '選擇要打卡的帳號'}</span>
           {accounts.length > 1 && !manageMode && (

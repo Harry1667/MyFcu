@@ -30,7 +30,17 @@ export const clockinLogs = sqliteTable(
   (t) => [index('clockin_logs_created_idx').on(t.createdAt)],
 );
 
+export const accountGroups = sqliteTable('account_groups', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  // JSON array of fcu_accounts.id. Dead ids (deleted accounts) are filtered on read.
+  memberIds: text('member_ids', { mode: 'json' }).$type<string[]>().notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
 export type FcuAccount = typeof fcuAccounts.$inferSelect;
+export type AccountGroup = typeof accountGroups.$inferSelect;
 export type NewFcuAccount = typeof fcuAccounts.$inferInsert;
 export type ClockinLog = typeof clockinLogs.$inferSelect;
 export type NewClockinLog = typeof clockinLogs.$inferInsert;
