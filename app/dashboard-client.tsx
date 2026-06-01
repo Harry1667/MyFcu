@@ -121,7 +121,7 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
                     <span className="line-clamp-1 text-sm font-medium">{a.displayName}</span>
                     <span className="font-mono text-[10px] text-zinc-400">{a.fcuNid}</span>
                   </button>
-                  {manageMode && (
+                  {manageMode ? (
                     <button
                       type="button"
                       onClick={() => handleDelete(a)}
@@ -131,6 +131,15 @@ export function DashboardClient({ accounts }: { accounts: Account[] }) {
                     >
                       ✕
                     </button>
+                  ) : (
+                    <Link
+                      href={`/account/${a.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`${a.displayName} 的功能（課表 / 學生證 / 請假）`}
+                      className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-bold text-zinc-500 shadow ring-1 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-800"
+                    >
+                      ›
+                    </Link>
                   )}
                 </li>
               );

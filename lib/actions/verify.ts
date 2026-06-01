@@ -4,11 +4,10 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clockinLogs, fcuAccounts } from '@/lib/db/schema';
 import { decryptCredential } from '@/lib/crypto/encryption';
+import { CookieJar, extractSetCookies, parseHidden, FCU_UA as UA } from '@/lib/fcu/session';
 
 const LOGIN_URL = 'https://signin.fcu.edu.tw/clockin/login.aspx';
 const STUDENT_URL = 'https://signin.fcu.edu.tw/clockin/Student.aspx';
-const UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export type VerifyResult = {
   ok: boolean;
@@ -17,36 +16,6 @@ export type VerifyResult = {
   htmlSnippet?: string;
   rawHtml?: string;
 };
-
-function parseHidden(html: string, name: string): string {
-  const re = new RegExp(`<input[^>]+name="${name}"[^>]+value="([^"]*)"`);
-  return html.match(re)?.[1] ?? '';
-}
-
-function extractSetCookies(res: Response): string[] {
-  const fn = (res.headers as unknown as { getSetCookie?: () => string[] })
-    .getSetCookie;
-  if (fn) return fn.call(res.headers);
-  const raw = res.headers.get('set-cookie');
-  return raw ? [raw] : [];
-}
-
-class CookieJar {
-  private cookies = new Map<string, string>();
-  add(setCookies: string[]) {
-    for (const sc of setCookies) {
-      const [pair] = sc.split(';');
-      const i = pair.indexOf('=');
-      if (i < 0) continue;
-      const k = pair.slice(0, i).trim();
-      const v = pair.slice(i + 1).trim();
-      if (k) this.cookies.set(k, v);
-    }
-  }
-  header(): string {
-    return [...this.cookies.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
-  }
-}
 
 function todayPatterns(): string[] {
   const now = new Date();

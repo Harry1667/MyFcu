@@ -44,6 +44,57 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [scannedToken, setScannedToken] = useState<string | null>(null);
   const scannerRef = useRef<import('html5-qrcode').Html5Qrcode | null>(null);
   const handledRef = useRef(false);
+  const [manualValue, setManualValue] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);
+
+  const stopScanner = useCallback(async () => {
+    const s = scannerRef.current;
+    scannerRef.current = null;
+    if (s) {
+      try {
+        await s.stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await s.clear();
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  // Manual fallback: user pastes the QR contents they decoded with the
+  // phone's native camera (which handles screen glare far better).
+  const submitManual = () => {
+    const v = manualValue.trim();
+    if (!v || handledRef.current) return;
+    handledRef.current = true;
+    setScannedToken(v);
+  };
+
+  // Photo fallback: decode a still photo instead of the live stream. A
+  // high-res still off a monitor decodes much more reliably than live video.
+  const scanPhoto = async (file: File) => {
+    if (handledRef.current) return;
+    setError(null);
+    await stopScanner();
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const tmp = new Html5Qrcode('qr-file-reader');
+      const decoded = await tmp.scanFile(file, false);
+      try {
+        await tmp.clear();
+      } catch {
+        /* ignore */
+      }
+      handledRef.current = true;
+      setScannedToken(decoded);
+    } catch {
+      setError('照片裡找不到 QR，可以再拍清楚一點，或直接貼上掃到的內容。');
+      setPhase('preflight');
+    }
+  };
 
   const postToFcu = useCallback(
     async (token: string) => {
@@ -154,20 +205,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   useEffect(() => {
     if (!scannedToken) return;
     void (async () => {
-      const s = scannerRef.current;
-      scannerRef.current = null;
-      if (s) {
-        try {
-          await s.stop();
-        } catch {
-          /* ignore */
-        }
-        try {
-          await s.clear();
-        } catch {
-          /* ignore */
-        }
-      }
+      await stopScanner();
       try {
         await postToFcu(scannedToken);
       } catch (e) {
@@ -175,7 +213,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         setPhase('done');
       }
     })();
-  }, [scannedToken, postToFcu]);
+  }, [scannedToken, postToFcu, stopScanner]);
 
   // Start scanner whenever phase === 'scan' (and on facing change while scanning).
   useEffect(() => {
@@ -190,7 +228,16 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: facing },
-          { fps: 10, qrbox: { width: 260, height: 260 } },
+          {
+            fps: 10,
+            // Size the scan box to ~90% of the viewfinder so a large
+            // screen-sized QR (whose finder patterns would fall outside a
+            // small fixed box) is fully inside the decode region.
+            qrbox: (vw: number, vh: number) => {
+              const size = Math.floor(Math.min(vw, vh) * 0.9);
+              return { width: size, height: size };
+            },
+          },
           (decoded) => {
             if (handledRef.current) return;
             handledRef.current = true;
@@ -246,6 +293,8 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setScannedToken(null);
     setResults([]);
     setError(null);
+    setManualValue('');
+    setManualOpen(false);
     setPhase('preflight');
   };
 
@@ -284,6 +333,57 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           </button>
         </div>
       </div>
+
+      {/* Hidden element used by scanFile() for the photo fallback. */}
+      <div id="qr-file-reader" className="hidden" />
+
+      {/* Fallbacks for when live scanning off a screen won't lock on. */}
+      {(phase === 'preflight' || phase === 'scan') && (
+        <div className="mt-4 space-y-2">
+          <label className="block w-full cursor-pointer rounded-2xl border border-zinc-300 bg-white py-3 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+            📸 改用拍照辨識
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) void scanPhoto(f);
+              }}
+            />
+          </label>
+
+          {!manualOpen ? (
+            <button
+              type="button"
+              onClick={() => setManualOpen(true)}
+              className="w-full text-center text-xs text-zinc-400 underline"
+            >
+              掃不到？手動貼上 QR 內容
+            </button>
+          ) : (
+            <div className="space-y-2 rounded-2xl border border-zinc-200 bg-white p-3">
+              <textarea
+                value={manualValue}
+                onChange={(e) => setManualValue(e.target.value)}
+                rows={3}
+                placeholder="用手機相機掃 QR 後，貼上掃到的文字…"
+                className="w-full resize-none rounded-lg border border-zinc-300 px-2 py-1.5 font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={submitManual}
+                disabled={!manualValue.trim()}
+                className="w-full rounded-lg bg-emerald-500 py-2 text-sm font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-400"
+              >
+                送出打卡
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {phase === 'preflight' && (
         <div className="mt-6 space-y-3">
