@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   createGroup,
   deleteGroup,
+  moveGroup,
   updateGroup,
   type GroupFormState,
 } from '@/lib/actions/groups';
@@ -27,8 +28,13 @@ export function GroupsManager({
 }) {
   // null = list view; 'new' = creating; otherwise editing that group id.
   const [editing, setEditing] = useState<string | null>(null);
+  const [moving, startMove] = useTransition();
 
   const editingGroup = groups.find((g) => g.id === editing) ?? null;
+  const move = (id: string, dir: 'up' | 'down') =>
+    startMove(async () => {
+      await moveGroup(id, dir);
+    });
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-8 pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -76,19 +82,31 @@ export function GroupsManager({
           {groups.map((g, i) => {
             const count = g.memberIds.filter((id) => accounts.some((a) => a.id === id)).length;
             return (
-              <li key={g.id} className="relative">
+              <li key={g.id} className="relative flex items-center">
                 {i > 0 && <span className="ios-divider absolute top-0 right-0 left-4" />}
                 <button
                   type="button"
                   onClick={() => setEditing(g.id)}
-                  className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-[--fill]"
+                  className="flex flex-1 items-center justify-between py-3 pl-4 text-left active:bg-[--fill]"
                 >
                   <div>
                     <div className="text-[17px] text-[--label]">{g.name}</div>
                     <div className="text-[13px] text-[--label-2]">{count} 人</div>
                   </div>
-                  <Chevron />
                 </button>
+                <div className="flex items-center gap-1.5 pr-3 pl-2">
+                  <Arrow
+                    dir="up"
+                    disabled={i === 0 || moving}
+                    onClick={() => move(g.id, 'up')}
+                  />
+                  <Arrow
+                    dir="down"
+                    disabled={i === groups.length - 1 || moving}
+                    onClick={() => move(g.id, 'down')}
+                  />
+                  <Chevron />
+                </div>
               </li>
             );
           })}
@@ -241,6 +259,42 @@ function Chevron() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function Arrow({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: 'up' | 'down';
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === 'up' ? '上移' : '下移'}
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-[--fill] text-[--tint] active:opacity-60 disabled:opacity-30"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 15 9"
+        fill="none"
+        className={dir === 'down' ? 'rotate-180' : ''}
+      >
+        <path
+          d="M1.5 7.5L7.5 1.5l6 6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
   );
 }
 

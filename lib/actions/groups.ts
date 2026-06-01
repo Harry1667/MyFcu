@@ -76,3 +76,25 @@ export async function deleteGroup(id: string) {
 export async function listGroups() {
   return db.select().from(accountGroups).orderBy(asc(accountGroups.sortOrder));
 }
+
+/** Move a group up or down one slot; renormalises every sortOrder to its index. */
+export async function moveGroup(id: string, dir: 'up' | 'down') {
+  const groups = await db
+    .select({ id: accountGroups.id })
+    .from(accountGroups)
+    .orderBy(asc(accountGroups.sortOrder));
+  const idx = groups.findIndex((g) => g.id === id);
+  const swap = dir === 'up' ? idx - 1 : idx + 1;
+  if (idx < 0 || swap < 0 || swap >= groups.length) return;
+
+  const order = groups.map((g) => g.id);
+  [order[idx], order[swap]] = [order[swap], order[idx]];
+
+  await Promise.all(
+    order.map((gid, i) =>
+      db.update(accountGroups).set({ sortOrder: i }).where(eq(accountGroups.id, gid)),
+    ),
+  );
+  revalidatePath('/');
+  revalidatePath('/groups');
+}

@@ -1,7 +1,38 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { clearLogs } from '@/lib/actions/logs';
+import { clearActivity, clearLogs } from '@/lib/actions/logs';
+
+const ACTIVITY_LABEL: Record<Activity['type'], string> = {
+  clockin: '打卡',
+  account_add: '新增帳號',
+  account_delete: '刪除帳號',
+  group_create: '建立群組',
+  group_update: '修改群組',
+  group_delete: '刪除群組',
+};
+
+/** Build a UTF-8 CSV (with BOM so Excel renders Chinese) and trigger a download. */
+function downloadCsv(filename: string, rows: (string | number | null)[][]) {
+  const esc = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function stamp() {
+  // Local YYYYMMDD-HHmm for the filename.
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
 
 type Item = {
   id: string;
@@ -94,6 +125,26 @@ export function LogsClient({
     });
   };
 
+  const exportClockin = () => {
+    const rows: (string | number | null)[][] = [
+      ['時間', '姓名', '學號', '送出', '驗證', '訊息', 'QR token'],
+    ];
+    for (const s of sessions) {
+      for (const it of s.items) {
+        rows.push([
+          s.createdAt.toLocaleString('zh-TW', { hour12: false }),
+          it.displayName,
+          it.fcuNid,
+          it.status === 'sent' ? '已送出' : '失敗',
+          it.verified === true ? '已記錄' : it.verified === false ? '未確認' : '',
+          it.verifyMessage ?? it.errorMessage ?? '',
+          s.token,
+        ]);
+      }
+    }
+    downloadCsv(`打卡紀錄-${stamp()}.csv`, rows);
+  };
+
   return (
     <>
       <nav className="ios-segment mt-4">
@@ -117,14 +168,19 @@ export function LogsClient({
             <span>
               共 {sessions.length} 次掃描、{totalCount} 筆
             </span>
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={pending}
-              className="font-medium text-[--danger]"
-            >
-              清空
-            </button>
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={exportClockin} className="font-medium text-[--tint]">
+                匯出
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={pending}
+                className="font-medium text-[--danger]"
+              >
+                清空
+              </button>
+            </div>
           </div>
 
           <ul className="space-y-3">
@@ -220,6 +276,8 @@ export function LogsClient({
 
 function ActivityFeed({ activities }: { activities: Activity[] }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [pending, startTransition] = useTransition();
+
   if (activities.length === 0) {
     return (
       <div className="ios-card mt-4 px-6 py-12 text-center text-[15px] text-[--label-2]">
@@ -235,8 +293,45 @@ function ActivityFeed({ activities }: { activities: Activity[] }) {
       return n;
     });
 
+  const exportActivity = () => {
+    const rows: (string | number | null)[][] = [['時間', '類型', '內容', '詳細']];
+    for (const a of activities) {
+      rows.push([
+        a.createdAt.toLocaleString('zh-TW', { hour12: false }),
+        ACTIVITY_LABEL[a.type],
+        a.summary,
+        a.detail ?? '',
+      ]);
+    }
+    downloadCsv(`操作紀錄-${stamp()}.csv`, rows);
+  };
+
+  const clear = () => {
+    if (!confirm(`刪除全部 ${activities.length} 筆操作紀錄？`)) return;
+    startTransition(async () => {
+      await clearActivity();
+    });
+  };
+
   return (
-    <ul className="ios-card mt-4">
+    <>
+      <div className="mt-4 mb-2 flex items-center justify-between px-1 text-[13px] text-[--label-2]">
+        <span>共 {activities.length} 筆操作</span>
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={exportActivity} className="font-medium text-[--tint]">
+            匯出
+          </button>
+          <button
+            type="button"
+            onClick={clear}
+            disabled={pending}
+            className="font-medium text-[--danger]"
+          >
+            清空
+          </button>
+        </div>
+      </div>
+      <ul className="ios-card">
       {activities.map((a, i) => {
         const isOpen = open.has(a.id);
         const hasDetail = !!a.detail;
@@ -277,7 +372,8 @@ function ActivityFeed({ activities }: { activities: Activity[] }) {
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </>
   );
 }
 
