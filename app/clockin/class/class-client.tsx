@@ -36,6 +36,14 @@ function avatarColor(seed: string) {
   return `hsl(${h % 360} 60% 55%)`;
 }
 
+// In-app browsers (LINE / FB / IG / Messenger / WeChat / generic Android wv)
+// commonly block getUserMedia — the live camera silently fails there.
+function detectInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /FBAN|FBAV|Instagram|Line\/|Messenger|MicroMessenger|Twitter|; wv\)|KAKAOTALK/i.test(ua);
+}
+
 export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [phase, setPhase] = useState<Phase>('preflight');
   const [results, setResults] = useState<Result[]>([]);
@@ -46,6 +54,17 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const handledRef = useRef(false);
   const [manualValue, setManualValue] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => setInApp(detectInAppBrowser()), []);
+  // Live camera controls discovered from the running track (help with hard
+  // screen/projector QRs): optical zoom + torch.
+  const [zoom, setZoom] = useState<{ min: number; max: number; step: number; value: number } | null>(
+    null,
+  );
+  const [torch, setTorch] = useState<{ available: boolean; on: boolean }>({
+    available: false,
+    on: false,
+  });
 
   const stopScanner = useCallback(async () => {
     const s = scannerRef.current;
@@ -80,8 +99,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setError(null);
     await stopScanner();
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const tmp = new Html5Qrcode('qr-file-reader');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      const tmp = new Html5Qrcode('qr-file-reader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        verbose: false,
+      });
       const decoded = await tmp.scanFile(file, false);
       try {
         await tmp.clear();
@@ -222,20 +245,34 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
     (async () => {
       try {
-        const { Html5Qrcode } = await import('html5-qrcode');
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
         if (cancelled) return;
-        const scanner = new Html5Qrcode('qr-reader');
+        // QR-only decoder + native BarcodeDetector when the browser has it
+        // (Android Chrome) — far more robust on glary screen QRs than jsQR.
+        const scanner = new Html5Qrcode('qr-reader', {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          verbose: false,
+        });
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: facing },
           {
-            fps: 10,
-            // Size the scan box to ~90% of the viewfinder so a large
-            // screen-sized QR (whose finder patterns would fall outside a
-            // small fixed box) is fully inside the decode region.
+            fps: 15,
+            // Scan box at ~92% of the viewfinder so a large screen-sized QR
+            // (finder patterns near the edges) stays fully inside the region.
             qrbox: (vw: number, vh: number) => {
-              const size = Math.floor(Math.min(vw, vh) * 0.9);
+              const size = Math.floor(Math.min(vw, vh) * 0.92);
               return { width: size, height: size };
+            },
+            // Ask for a high-res stream with continuous autofocus — sharper
+            // frames decode a distant/small QR far more reliably.
+            videoConstraints: {
+              facingMode: facing,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              // focusMode isn't in the standard TS type yet.
+              advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
             },
           },
           (decoded) => {
@@ -245,6 +282,25 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           },
           () => {},
         );
+
+        // Surface zoom/torch controls if the camera supports them.
+        try {
+          const caps = scanner.getRunningTrackCapabilities() as MediaTrackCapabilities & {
+            zoom?: { min: number; max: number; step: number };
+            torch?: boolean;
+          };
+          if (!cancelled && caps.zoom && caps.zoom.max > caps.zoom.min) {
+            setZoom({
+              min: caps.zoom.min,
+              max: caps.zoom.max,
+              step: caps.zoom.step || 0.1,
+              value: caps.zoom.min,
+            });
+          }
+          if (!cancelled && caps.torch) setTorch({ available: true, on: false });
+        } catch {
+          /* capabilities not available */
+        }
       } catch (e) {
         if (!cancelled) {
           const msg =
@@ -261,6 +317,8 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
     return () => {
       cancelled = true;
+      setZoom(null);
+      setTorch({ available: false, on: false });
       const s = scannerRef.current;
       scannerRef.current = null;
       if (s) {
@@ -288,6 +346,25 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setFacing((f) => (f === 'environment' ? 'user' : 'environment'));
   };
 
+  const applyZoom = (value: number) => {
+    setZoom((z) => (z ? { ...z, value } : z));
+    scannerRef.current
+      ?.applyVideoConstraints({
+        advanced: [{ zoom: value } as MediaTrackConstraintSet],
+      })
+      .catch(() => {});
+  };
+
+  const toggleTorch = () => {
+    const next = !torch.on;
+    scannerRef.current
+      ?.applyVideoConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      })
+      .then(() => setTorch((t) => ({ ...t, on: next })))
+      .catch(() => {});
+  };
+
   const rescan = () => {
     handledRef.current = false;
     setScannedToken(null);
@@ -295,6 +372,8 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setError(null);
     setManualValue('');
     setManualOpen(false);
+    setZoom(null);
+    setTorch({ available: false, on: false });
     setPhase('preflight');
   };
 
@@ -311,6 +390,13 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         對準老師螢幕的 QR，自動為 {accounts.length} 個帳號送出打卡。
       </p>
 
+      {inApp && (
+        <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
+          ⚠️ 你在 App 內建瀏覽器（LINE／IG／FB…）開啟，相機常常打不開。
+          建議用 <b>Safari / Chrome</b> 開這個網址；或直接用下方的「📸 拍照辨識」，不需要開相機權限。
+        </div>
+      )}
+
       {error && (
         <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
           ⚠️ {error}
@@ -323,15 +409,47 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           id="qr-reader"
           className="overflow-hidden rounded-2xl bg-black"
         />
-        <div className="mt-3 flex justify-center">
+        {zoom && (
+          <div className="mt-3 flex items-center gap-3 rounded-xl bg-[--fill] px-4 py-2.5">
+            <span className="text-[13px] text-[--label-2]">縮放</span>
+            <input
+              type="range"
+              min={zoom.min}
+              max={zoom.max}
+              step={zoom.step}
+              value={zoom.value}
+              onChange={(e) => applyZoom(Number(e.target.value))}
+              className="h-1 flex-1 accent-[#34c759]"
+              aria-label="相機縮放"
+            />
+            <span className="w-9 text-right font-mono text-[12px] text-[--label-2]">
+              {(zoom.value / zoom.min || zoom.value).toFixed(1)}×
+            </span>
+          </div>
+        )}
+        <div className="mt-3 flex justify-center gap-2">
           <button
             type="button"
             onClick={switchCamera}
             className="rounded-full bg-[--fill] px-4 py-2 text-[14px] font-medium text-[--label] active:opacity-70"
           >
-            🔄 切換鏡頭（目前 {facing === 'environment' ? '後' : '前'} 鏡頭）
+            🔄 切換鏡頭（{facing === 'environment' ? '後' : '前'}）
           </button>
+          {torch.available && (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              className={`rounded-full px-4 py-2 text-[14px] font-medium active:opacity-70 ${
+                torch.on ? 'bg-[--tint] text-white' : 'bg-[--fill] text-[--label]'
+              }`}
+            >
+              {torch.on ? '💡 關燈' : '🔦 開燈'}
+            </button>
+          )}
         </div>
+        <p className="mt-2 text-center text-[12px] text-[--label-3]">
+          對不到焦？用縮放拉近老師螢幕的 QR，或改用下方「拍照辨識」。
+        </p>
       </div>
 
       {/* Hidden element used by scanFile() for the photo fallback. */}
@@ -341,7 +459,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {(phase === 'preflight' || phase === 'scan') && (
         <div className="mt-4 space-y-2">
           <label className="ios-card block w-full cursor-pointer py-3 text-center text-[15px] font-medium text-[--tint] active:opacity-70">
-            📸 改用拍照辨識
+            📸 拍照辨識（免相機權限，最穩）
             <input
               type="file"
               accept="image/*"

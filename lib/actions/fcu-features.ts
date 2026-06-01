@@ -2,7 +2,7 @@
 
 import { loadAccountWithPassword } from '@/lib/fcu/account';
 import { fetchTimetable } from '@/lib/fcu/timetable';
-import { fetchStudentCard } from '@/lib/fcu/card';
+import { fetchStudentCard, fetchStudentCardQr } from '@/lib/fcu/card';
 import { fetchAbsence, fetchExamSchedule } from '@/lib/fcu/myfcu';
 import type {
   AbsenceRecord,
@@ -41,6 +41,13 @@ export async function getStudentCard(
   accountId: string,
 ): Promise<FeatureResult<StudentCard>> {
   return run(accountId, fetchStudentCard);
+}
+
+/** Lightweight QR-only refresh for the auto-refreshing student card. */
+export async function getStudentCardQr(
+  accountId: string,
+): Promise<FeatureResult<string>> {
+  return run(accountId, fetchStudentCardQr);
 }
 
 export async function getAbsence(

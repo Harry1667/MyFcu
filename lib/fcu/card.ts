@@ -4,6 +4,7 @@ import type { FcuCredential, StudentCard } from './types';
 const BASE = 'https://service202-sds.fcu.edu.tw/FcucardQrcode/';
 const LOGIN_URL = BASE + 'login.aspx';
 const ICCARD_URL = BASE + 'FcuCard.aspx/GetICCard';
+const ENCRYPT_URL = BASE + 'FcuCard.aspx/GetEncryptData';
 
 type EncResult = {
   hexString: string;
@@ -63,22 +64,19 @@ async function fetchDataUrl(
  * Privacy: the GetICCard response also carries idno (身分證) and bdate — we
  * deliberately drop those and never return or log them.
  */
-export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard> {
+/**
+ * ASP.NET WebForms login (LoginLdap) → returns an authenticated cookie jar.
+ * The "simple username/password" mobile path the app uses does not
+ * authenticate a backend IP (it just re-renders the login form), so we drive
+ * the real form: GET to grab __VIEWSTATE/__EVENTVALIDATION, then POST creds.
+ */
+async function loginFcuCard(acc: FcuCredential): Promise<CookieJar> {
   const jar = new CookieJar();
-
-  // 1. ASP.NET WebForms login (LoginLdap). The "simple username/password"
-  //    mobile path the app uses does not authenticate a backend IP — it just
-  //    re-renders the login form — so we drive the real LoginLdap form:
-  //    GET to grab __VIEWSTATE/__EVENTVALIDATION, then POST credentials.
   const loginGet = await fetch(LOGIN_URL, { headers: { 'User-Agent': FCU_UA } });
   jar.add(extractSetCookies(loginGet));
   const loginHtml = await loginGet.text();
   const vs = parseHidden(loginHtml, '__VIEWSTATE');
-  const ev = parseHidden(loginHtml, '__EVENTVALIDATION');
-  const vsg = parseHidden(loginHtml, '__VIEWSTATEGENERATOR');
-  if (!vs) {
-    throw new Error('學生證登入頁解析失敗');
-  }
+  if (!vs) throw new Error('學生證登入頁解析失敗');
 
   const loginRes = await fetch(LOGIN_URL, {
     method: 'POST',
@@ -92,8 +90,8 @@ export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard>
       __EVENTTARGET: '',
       __EVENTARGUMENT: '',
       __VIEWSTATE: vs,
-      __VIEWSTATEGENERATOR: vsg,
-      __EVENTVALIDATION: ev,
+      __VIEWSTATEGENERATOR: parseHidden(loginHtml, '__VIEWSTATEGENERATOR'),
+      __EVENTVALIDATION: parseHidden(loginHtml, '__EVENTVALIDATION'),
       'LoginLdap$UserName': acc.fcuNid,
       'LoginLdap$Password': acc.password,
       'LoginLdap$LoginButton': '登入',
@@ -105,8 +103,26 @@ export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard>
   if (loginRes.status !== 302) {
     throw new Error('學生證登入失敗，請確認 FCU 帳號密碼');
   }
+  return jar;
+}
 
-  // 2. GetICCard → card data + encrypted QR blob + photo JWT
+/** Build the QR image data URL from a session + encResult. */
+async function qrDataUrlFrom(
+  jar: CookieJar,
+  enc: EncResult,
+): Promise<string> {
+  const qrUrl = enc.qrcodeUrl
+    ? BASE + enc.qrcodeUrl
+    : BASE + 'CreateQRCode.ashx?txt=' + encodeURIComponent(enc.hexString);
+  const url = await fetchDataUrl(qrUrl, jar);
+  if (!url) throw new Error('學生證 QR 取得失敗');
+  return url;
+}
+
+export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard> {
+  const jar = await loginFcuCard(acc);
+
+  // GetICCard → card data + encrypted QR blob + photo JWT
   const cardRes = await fetch(ICCARD_URL, {
     method: 'POST',
     headers: {
@@ -128,16 +144,10 @@ export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard>
     throw new Error('學生證資料不完整');
   }
 
-  // 3. QR image (server-encrypted blob, cannot be forged — we just render it)
-  const qrUrl = d.encResult.qrcodeUrl
-    ? BASE + d.encResult.qrcodeUrl
-    : BASE + 'CreateQRCode.ashx?txt=' + encodeURIComponent(d.encResult.hexString);
-  const qrDataUrl = await fetchDataUrl(qrUrl, jar);
-  if (!qrDataUrl) {
-    throw new Error('學生證 QR 取得失敗');
-  }
+  // QR image (server-encrypted blob, cannot be forged — we just render it)
+  const qrDataUrl = await qrDataUrlFrom(jar, d.encResult);
 
-  // 4. Photo (best-effort; JWT is short-lived)
+  // Photo (best-effort; JWT is short-lived)
   const photoDataUrl = d.pname
     ? await fetchDataUrl(BASE + 'download_photo.aspx?pname=' + encodeURIComponent(d.pname), jar)
     : null;
@@ -160,4 +170,32 @@ export async function fetchStudentCard(acc: FcuCredential): Promise<StudentCard>
     qrDataUrl,
     photoDataUrl,
   };
+}
+
+/**
+ * Lightweight QR refresh: login → GetEncryptData → CreateQRCode only.
+ * Skips GetICCard + photo so the periodic auto-refresh stays cheap. The QR
+ * blob is server-encrypted and short-lived, so the card view re-fetches it on
+ * an interval to keep a scannable code on screen.
+ */
+export async function fetchStudentCardQr(acc: FcuCredential): Promise<string> {
+  const jar = await loginFcuCard(acc);
+  const res = await fetch(ENCRYPT_URL, {
+    method: 'POST',
+    headers: {
+      'User-Agent': FCU_UA,
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      Cookie: jar.header(),
+    },
+    body: '{}',
+  });
+  let parsed: { d?: EncResult };
+  try {
+    parsed = (await res.json()) as { d?: EncResult };
+  } catch {
+    throw new Error('學生證 QR 更新失敗（session 可能過期）');
+  }
+  if (!parsed.d?.hexString) throw new Error('學生證 QR 更新失敗');
+  return qrDataUrlFrom(jar, parsed.d);
 }

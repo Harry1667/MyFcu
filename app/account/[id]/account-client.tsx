@@ -6,6 +6,7 @@ import {
   getAbsence,
   getExamSchedule,
   getStudentCard,
+  getStudentCardQr,
   getTimetable,
 } from '@/lib/actions/fcu-features';
 import type {
@@ -104,7 +105,7 @@ export function AccountPanel({ account }: { account: Account }) {
         ) : (
           current.result &&
           current.result.ok && (
-            <Panel tab={active} data={current.result.data} onRefresh={() => load(active)} />
+            <Panel tab={active} data={current.result.data} accountId={account.id} />
           )
         )}
       </section>
@@ -142,17 +143,17 @@ function ErrorBox({ message, onRetry }: { message: string; onRetry: () => void }
 function Panel({
   tab,
   data,
-  onRefresh,
+  accountId,
 }: {
   tab: TabKey;
   data: unknown;
-  onRefresh: () => void;
+  accountId: string;
 }) {
   switch (tab) {
     case 'timetable':
       return <TimetableView data={data as Timetable} />;
     case 'card':
-      return <CardView data={data as StudentCard} onRefresh={onRefresh} />;
+      return <CardView data={data as StudentCard} accountId={accountId} />;
     case 'absence':
       return <AbsenceView data={data as AbsenceRecord[]} />;
     case 'exam':
@@ -245,7 +246,26 @@ function TimetableView({ data }: { data: Timetable }) {
 
 // ---- 學生證 ----
 
-function CardView({ data, onRefresh }: { data: StudentCard; onRefresh: () => void }) {
+function CardView({ data, accountId }: { data: StudentCard; accountId: string }) {
+  const [qr, setQr] = useState(data.qrDataUrl);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setError(false);
+    try {
+      const r = await getStudentCardQr(accountId);
+      if (r.ok) setQr(r.data);
+      else setError(true);
+    } catch {
+      setError(true);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="ios-card p-5">
@@ -269,25 +289,40 @@ function CardView({ data, onRefresh }: { data: StudentCard; onRefresh: () => voi
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col items-center rounded-xl bg-white p-4">
+        <div className="relative mt-5 flex flex-col items-center rounded-xl bg-white p-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={data.qrDataUrl} alt="電子學生證 QR" className="h-52 w-52" />
+          <img
+            src={qr}
+            alt="電子學生證 QR"
+            className={`h-52 w-52 transition-opacity ${refreshing ? 'opacity-40' : 'opacity-100'}`}
+          />
+          {refreshing && (
+            <div className="absolute top-1/2 left-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-[2.5px] border-zinc-200 border-t-[#34c759]" />
+          )}
           {data.barcode && (
             <div className="mt-3 font-mono text-[13px] tracking-[0.2em] text-zinc-500">
               {data.barcode}
             </div>
           )}
         </div>
+
         {data.semesterLabel && (
           <div className="mt-3 text-center text-[13px] text-[--label-2]">{data.semesterLabel}</div>
         )}
       </div>
 
-      <button type="button" onClick={onRefresh} className="ios-btn-secondary">
-        重新整理 QR
+      <button
+        type="button"
+        onClick={() => void refresh()}
+        disabled={refreshing}
+        className="ios-btn-secondary disabled:opacity-50"
+      >
+        {refreshing ? '更新中…' : '重新整理 QR'}
       </button>
       <p className="px-2 text-center text-[12px] text-[--label-3]">
-        QR 為伺服器即時加密產生，短時間後可能失效，刷卡前請重新整理。
+        {error
+          ? '更新失敗，請再試一次。'
+          : '此 QR 為固定碼、不會過期；如未顯示可手動重新整理。'}
       </p>
     </div>
   );
