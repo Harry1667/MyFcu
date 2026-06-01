@@ -4,7 +4,12 @@ import './globals.css';
 export const metadata: Metadata = {
   title: '逢甲打卡',
   description: 'FCU 多帳號打卡工具',
+  manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: '逢甲打卡' },
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/icon-180.png',
+  },
 };
 
 export const viewport: Viewport = {

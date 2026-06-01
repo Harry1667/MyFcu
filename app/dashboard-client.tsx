@@ -3,6 +3,9 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { deleteFcuAccount } from '@/lib/actions/accounts';
+import { checkAccountHealth } from '@/lib/actions/fcu-features';
+
+type Health = 'checking' | 'valid' | 'invalid' | 'error';
 
 type Account = { id: string; displayName: string; fcuNid: string };
 type Group = { id: string; name: string; memberIds: string[] };
@@ -23,6 +26,20 @@ export function DashboardClient({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manageMode, setManageMode] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [health, setHealth] = useState<Record<string, Health>>({});
+  const [checking, setChecking] = useState(false);
+
+  const runHealthCheck = () => {
+    if (checking) return;
+    setChecking(true);
+    setHealth(Object.fromEntries(accounts.map((a) => [a.id, 'checking' as Health])));
+    void Promise.all(
+      accounts.map(async (a) => {
+        const status = await checkAccountHealth(a.id).catch(() => 'error' as const);
+        setHealth((h) => ({ ...h, [a.id]: status }));
+      }),
+    ).finally(() => setChecking(false));
+  };
 
   const toggle = (id: string) => {
     if (manageMode) return;
@@ -70,6 +87,11 @@ export function DashboardClient({
       <header className="flex items-end justify-between pt-3">
         <h1 className="ios-title">逢甲打卡</h1>
         <div className="flex items-center gap-4 pb-1 text-[15px] text-[--tint]">
+          {accounts.length > 0 && !manageMode && (
+            <button type="button" onClick={runHealthCheck} disabled={checking}>
+              {checking ? '檢查中…' : '檢查'}
+            </button>
+          )}
           <Link href="/logs">紀錄</Link>
           {accounts.length > 0 && (
             <button type="button" onClick={() => setManageMode((m) => !m)} className="font-medium">
@@ -191,6 +213,7 @@ export function DashboardClient({
                         <Name acc={a} />
                       </button>
                     )}
+                    {!manageMode && health[a.id] && <HealthBadge status={health[a.id]} />}
                     {!manageMode && (
                       <Link
                         href={`/account/${a.id}`}
@@ -255,6 +278,31 @@ function Name({ acc }: { acc: Account }) {
     <span className="min-w-0 flex-1">
       <span className="block truncate text-[17px] text-[--label]">{acc.displayName}</span>
       <span className="block font-mono text-[12px] text-[--label-2]">{acc.fcuNid}</span>
+    </span>
+  );
+}
+
+function HealthBadge({ status }: { status: Health }) {
+  if (status === 'checking') {
+    return (
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[--fill-strong] border-t-[--tint]" />
+    );
+  }
+  const ok = status === 'valid';
+  const color = ok ? 'var(--tint)' : 'var(--danger)';
+  return (
+    <span
+      className="flex h-[18px] w-[18px] items-center justify-center rounded-full text-white"
+      style={{ backgroundColor: color }}
+      title={ok ? '密碼有效' : status === 'invalid' ? '密碼失效' : '檢查失敗'}
+    >
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+        {ok ? (
+          <path d="M2.5 6.2l2.2 2.2L9.5 3.6" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+        )}
+      </svg>
     </span>
   );
 }

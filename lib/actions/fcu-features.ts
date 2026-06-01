@@ -3,6 +3,7 @@
 import { loadAccountWithPassword } from '@/lib/fcu/account';
 import { fetchTimetable } from '@/lib/fcu/timetable';
 import { fetchStudentCard, fetchStudentCardQr } from '@/lib/fcu/card';
+import { checkCredential } from '@/lib/fcu/check';
 import { fetchAbsence, fetchExamSchedule } from '@/lib/fcu/myfcu';
 import type {
   AbsenceRecord,
@@ -48,6 +49,19 @@ export async function getStudentCardQr(
   accountId: string,
 ): Promise<FeatureResult<string>> {
   return run(accountId, fetchStudentCardQr);
+}
+
+/** Check whether a stored account's password still works. */
+export async function checkAccountHealth(
+  accountId: string,
+): Promise<'valid' | 'invalid' | 'error'> {
+  const acc = await loadAccountWithPassword(accountId);
+  if (!acc) return 'error';
+  try {
+    return (await checkCredential(acc)) ? 'valid' : 'invalid';
+  } catch {
+    return 'error';
+  }
 }
 
 export async function getAbsence(
