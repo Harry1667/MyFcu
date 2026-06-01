@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { fcuAccounts } from '@/lib/db/schema';
 import { encryptCredential } from '@/lib/crypto/encryption';
+import { logActivity } from '@/lib/activity-log';
 
 export type FormState = { ok: boolean; error?: string } | null;
 
@@ -46,11 +47,18 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
     createdAt: new Date(),
   });
 
+  await logActivity('account_add', `新增帳號：${displayName}（${fcuNid.toUpperCase()}）`);
   revalidatePath('/');
   redirect('/');
 }
 
 export async function deleteFcuAccount(id: string) {
+  const [acc] = await db
+    .select({ displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })
+    .from(fcuAccounts)
+    .where(eq(fcuAccounts.id, id))
+    .limit(1);
   await db.delete(fcuAccounts).where(eq(fcuAccounts.id, id));
+  if (acc) await logActivity('account_delete', `刪除帳號：${acc.displayName}（${acc.fcuNid}）`);
   revalidatePath('/');
 }

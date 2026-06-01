@@ -36,6 +36,13 @@
       "when": 1780337889566,
       "tag": "0004_dashing_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780338245597,
+      "tag": "0005_dashing_annihilus",
+      "breakpoints": true
     }
   ]
 }

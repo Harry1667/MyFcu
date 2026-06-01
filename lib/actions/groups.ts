@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { accountGroups } from '@/lib/db/schema';
+import { logActivity } from '@/lib/activity-log';
 
 export type GroupFormState = { ok: boolean; error?: string } | null;
 
@@ -36,6 +37,7 @@ export async function createGroup(
     sortOrder: existing.length,
     createdAt: new Date(),
   });
+  await logActivity('group_create', `建立群組：${p.data.name}（${p.data.memberIds.length} 人）`);
   revalidatePath('/');
   revalidatePath('/groups');
   return { ok: true };
@@ -53,13 +55,20 @@ export async function updateGroup(
     .update(accountGroups)
     .set({ name: p.data.name, memberIds: p.data.memberIds })
     .where(eq(accountGroups.id, id));
+  await logActivity('group_update', `修改群組：${p.data.name}（${p.data.memberIds.length} 人）`);
   revalidatePath('/');
   revalidatePath('/groups');
   return { ok: true };
 }
 
 export async function deleteGroup(id: string) {
+  const [g] = await db
+    .select({ name: accountGroups.name })
+    .from(accountGroups)
+    .where(eq(accountGroups.id, id))
+    .limit(1);
   await db.delete(accountGroups).where(eq(accountGroups.id, id));
+  if (g) await logActivity('group_delete', `刪除群組：${g.name}`);
   revalidatePath('/');
   revalidatePath('/groups');
 }

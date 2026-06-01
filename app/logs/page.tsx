@@ -1,17 +1,16 @@
 import { desc } from 'drizzle-orm';
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { clockinLogs } from '@/lib/db/schema';
+import { activityLogs, clockinLogs } from '@/lib/db/schema';
 import { LogsClient } from './logs-client';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LogsPage() {
-  const rows = await db
-    .select()
-    .from(clockinLogs)
-    .orderBy(desc(clockinLogs.createdAt))
-    .limit(500);
+  const [rows, activityRows] = await Promise.all([
+    db.select().from(clockinLogs).orderBy(desc(clockinLogs.createdAt)).limit(500),
+    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(500),
+  ]);
 
   const grouped = new Map<string, typeof rows>();
   for (const r of rows) {
@@ -51,16 +50,20 @@ export default async function LogsPage() {
           </svg>
           首頁
         </Link>
-        <h1 className="ios-title mt-2">打卡紀錄</h1>
+        <h1 className="ios-title mt-2">紀錄</h1>
       </header>
 
-      {sessions.length === 0 ? (
-        <div className="ios-card mt-6 px-6 py-12 text-center text-[15px] text-[--label-2]">
-          還沒有紀錄。掃過 QR 之後會自動寫進來。
-        </div>
-      ) : (
-        <LogsClient sessions={sessions} totalCount={rows.length} />
-      )}
+      <LogsClient
+        sessions={sessions}
+        totalCount={rows.length}
+        activities={activityRows.map((a) => ({
+          id: a.id,
+          type: a.type,
+          summary: a.summary,
+          detail: a.detail,
+          createdAt: a.createdAt,
+        }))}
+      />
     </main>
   );
 }

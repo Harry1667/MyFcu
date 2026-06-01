@@ -20,6 +20,29 @@ type Session = {
   items: Item[];
 };
 
+type Activity = {
+  id: string;
+  type:
+    | 'clockin'
+    | 'account_add'
+    | 'account_delete'
+    | 'group_create'
+    | 'group_update'
+    | 'group_delete';
+  summary: string;
+  detail: string | null;
+  createdAt: Date;
+};
+
+const ACTIVITY_ICON: Record<Activity['type'], string> = {
+  clockin: '📷',
+  account_add: '➕',
+  account_delete: '🗑️',
+  group_create: '👥',
+  group_update: '✏️',
+  group_delete: '🗑️',
+};
+
 function avatarColor(seed: string) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -47,12 +70,15 @@ function itemBadge(item: Item) {
 export function LogsClient({
   sessions,
   totalCount,
+  activities,
 }: {
   sessions: Session[];
   totalCount: number;
+  activities: Activity[];
 }) {
   const [pending, startTransition] = useTransition();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<'clockin' | 'activity'>('clockin');
 
   const toggle = (key: string) => {
     const next = new Set(expanded);
@@ -62,7 +88,7 @@ export function LogsClient({
   };
 
   const handleClear = () => {
-    if (!confirm(`刪除全部 ${totalCount} 筆紀錄？`)) return;
+    if (!confirm(`刪除全部 ${totalCount} 筆打卡紀錄？`)) return;
     startTransition(async () => {
       await clearLogs();
     });
@@ -70,21 +96,38 @@ export function LogsClient({
 
   return (
     <>
-      <div className="mt-4 mb-2 flex items-center justify-between px-1 text-[13px] text-[--label-2]">
-        <span>
-          共 {sessions.length} 次掃描、{totalCount} 筆
-        </span>
-        <button
-          type="button"
-          onClick={handleClear}
-          disabled={pending}
-          className="font-medium text-[--danger]"
-        >
-          清空
+      <nav className="ios-segment mt-4">
+        <button type="button" data-active={view === 'clockin'} onClick={() => setView('clockin')}>
+          打卡
         </button>
-      </div>
+        <button type="button" data-active={view === 'activity'} onClick={() => setView('activity')}>
+          操作
+        </button>
+      </nav>
 
-      <ul className="space-y-3">
+      {view === 'activity' ? (
+        <ActivityFeed activities={activities} />
+      ) : sessions.length === 0 ? (
+        <div className="ios-card mt-4 px-6 py-12 text-center text-[15px] text-[--label-2]">
+          還沒有打卡紀錄。掃過 QR 之後會自動寫進來。
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 mb-2 flex items-center justify-between px-1 text-[13px] text-[--label-2]">
+            <span>
+              共 {sessions.length} 次掃描、{totalCount} 筆
+            </span>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={pending}
+              className="font-medium text-[--danger]"
+            >
+              清空
+            </button>
+          </div>
+
+          <ul className="space-y-3">
         {sessions.map((s) => {
           const verified = s.items.filter((i) => i.verified === true).length;
           const unverified = s.items.filter((i) => i.status === 'sent' && i.verified === false).length;
@@ -168,9 +211,82 @@ export function LogsClient({
             </li>
           );
         })}
-      </ul>
+          </ul>
+        </>
+      )}
     </>
   );
+}
+
+function ActivityFeed({ activities }: { activities: Activity[] }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  if (activities.length === 0) {
+    return (
+      <div className="ios-card mt-4 px-6 py-12 text-center text-[15px] text-[--label-2]">
+        還沒有操作紀錄。新增帳號、建群組、打卡都會記在這裡。
+      </div>
+    );
+  }
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  return (
+    <ul className="ios-card mt-4">
+      {activities.map((a, i) => {
+        const isOpen = open.has(a.id);
+        const hasDetail = !!a.detail;
+        return (
+          <li key={a.id} className="relative">
+            {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[52px]" />}
+            <button
+              type="button"
+              onClick={() => hasDetail && toggle(a.id)}
+              className="flex w-full items-start gap-3 px-4 py-2.5 text-left active:bg-[--fill]"
+            >
+              <span className="mt-0.5 text-[18px] leading-none">{ACTIVITY_ICON[a.type]}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] text-[--label]">{a.summary}</span>
+                <span className="block text-[12px] text-[--label-2]">
+                  {a.createdAt.toLocaleString('zh-TW', { hour12: false })} · {timeAgo(a.createdAt)}
+                </span>
+              </span>
+              {hasDetail && (
+                <span className={`mt-1 text-[--label-3] transition ${isOpen ? 'rotate-90' : ''}`}>
+                  <svg width="8" height="13" viewBox="0 0 9 15" fill="none">
+                    <path
+                      d="M1.5 1.5L7 7.5l-5.5 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              )}
+            </button>
+            {isOpen && hasDetail && (
+              <pre className="mx-3 mb-3 overflow-x-auto rounded-lg bg-[--fill] px-3 py-2 font-mono text-[11px] break-all whitespace-pre-wrap text-[--label-2]">
+                {prettyDetail(a.detail!)}
+              </pre>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function prettyDetail(detail: string): string {
+  try {
+    return JSON.stringify(JSON.parse(detail), null, 2);
+  } catch {
+    return detail;
+  }
 }
 
 function Pill({ color, children }: { color: string; children: React.ReactNode }) {

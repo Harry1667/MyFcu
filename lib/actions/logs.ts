@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { clockinLogs } from '@/lib/db/schema';
+import { logActivity } from '@/lib/activity-log';
 
 export type LogEntry = {
   accountId: string;
@@ -33,6 +34,10 @@ export async function logScanAttempts(
     createdAt: now,
   }));
   await db.insert(clockinLogs).values(rows);
+  await logActivity('clockin', `掃描打卡 ${entries.length} 人`, {
+    token,
+    accounts: entries.map((e) => ({ name: e.displayName, nid: e.fcuNid, status: e.status })),
+  });
   revalidatePath('/logs');
   return Object.fromEntries(rows.map((r) => [r.accountId, r.id]));
 }

@@ -39,8 +39,30 @@ export const accountGroups = sqliteTable('account_groups', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
+export const activityLogs = sqliteTable(
+  'activity_logs',
+  {
+    id: text('id').primaryKey(),
+    type: text('type', {
+      enum: [
+        'clockin',
+        'account_add',
+        'account_delete',
+        'group_create',
+        'group_update',
+        'group_delete',
+      ],
+    }).notNull(),
+    summary: text('summary').notNull(),
+    detail: text('detail'), // optional JSON string
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => [index('activity_logs_created_idx').on(t.createdAt)],
+);
+
 export type FcuAccount = typeof fcuAccounts.$inferSelect;
 export type AccountGroup = typeof accountGroups.$inferSelect;
+export type ActivityLog = typeof activityLogs.$inferSelect;
 export type NewFcuAccount = typeof fcuAccounts.$inferInsert;
 export type ClockinLog = typeof clockinLogs.$inferSelect;
 export type NewClockinLog = typeof clockinLogs.$inferInsert;
