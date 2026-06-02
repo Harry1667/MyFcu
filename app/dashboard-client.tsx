@@ -29,11 +29,9 @@ export function DashboardClient({
   vaults: Vault[];
   groups: Group[];
 }) {
-  // Members open one group to clock everyone in, so pre-select all of their
-  // accounts — one tap to scan. Admin sees many across vaults, so start empty.
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(isAdmin ? [] : accounts.map((a) => a.id)),
-  );
+  // Start with nothing selected — the user picks who to clock in (pre-selecting
+  // all risks accidentally clocking in the whole group).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manageMode, setManageMode] = useState(false);
   const [pending, startTransition] = useTransition();
   const [health, setHealth] = useState<Record<string, Health>>({});
