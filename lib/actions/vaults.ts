@@ -30,6 +30,24 @@ const COOKIE_OPTS = {
 
 export type UnlockState = { error?: string } | null;
 
+export type GateState = { ok: boolean; error?: string } | null;
+
+/**
+ * Verify the admin password to view a locked account's details, without
+ * redirecting (the caller reloads in place). Sets the admin cookie on success,
+ * so the viewer becomes admin — only the admin knows this password anyway.
+ */
+export async function gateAdmin(_prev: GateState, formData: FormData): Promise<GateState> {
+  const pw = String(formData.get('password') ?? '').trim();
+  if (!pw) return { ok: false, error: '請輸入密碼' };
+  const token = await tokenFor(pw);
+  const admin = await adminToken();
+  if (!token || !admin || token !== admin) return { ok: false, error: '管理員密碼不正確' };
+  const jar = await cookies();
+  jar.set(ADMIN_COOKIE, token, COOKIE_OPTS);
+  return { ok: true };
+}
+
 /**
  * Validate a password against a specific target chosen on the landing page.
  * `vaultId` is either a real vault id (check that vault's password) or

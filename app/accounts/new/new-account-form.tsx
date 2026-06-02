@@ -96,6 +96,16 @@ export function NewAccountForm({ vaults }: { vaults: Vault[] }) {
           )}
         </div>
 
+        <label className="ios-card flex items-center justify-between px-4 py-3">
+          <span>
+            <span className="block text-[15px] text-[--label]">上鎖此帳號</span>
+            <span className="block text-[12px] text-[--label-2]">
+              仍可打卡，但要看課表／學生證等詳情需管理員密碼
+            </span>
+          </span>
+          <input type="checkbox" name="isLocked" className="h-5 w-5 accent-[#34c759]" />
+        </label>
+
         {state?.error && (
           <p className="rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
             {state.error}

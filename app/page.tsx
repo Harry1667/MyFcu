@@ -20,6 +20,7 @@ export default async function HomePage() {
         displayName: fcuAccounts.displayName,
         fcuNid: fcuAccounts.fcuNid,
         vaultId: fcuAccounts.vaultId,
+        isLocked: fcuAccounts.isLocked,
       })
       .from(fcuAccounts)
       .orderBy(asc(fcuAccounts.sortOrder)),

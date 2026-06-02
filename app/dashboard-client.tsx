@@ -2,14 +2,20 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { deleteFcuAccount } from '@/lib/actions/accounts';
-import { assignAccountVault, lockAll } from '@/lib/actions/vaults';
+import { setAccountLocked } from '@/lib/actions/accounts';
+import { lockAll } from '@/lib/actions/vaults';
 import { checkAccountHealth } from '@/lib/actions/fcu-features';
-import { IconLock, IconPlus } from '@/app/icons';
+import { IconChevronRight, IconLock, IconPlus, IconUnlock } from '@/app/icons';
 
 type Health = 'checking' | 'valid' | 'invalid' | 'error';
 
-type Account = { id: string; displayName: string; fcuNid: string; vaultId: string | null };
+type Account = {
+  id: string;
+  displayName: string;
+  fcuNid: string;
+  vaultId: string | null;
+  isLocked: boolean;
+};
 type Vault = { id: string; name: string };
 type Group = { id: string; name: string; memberIds: string[] };
 
@@ -93,21 +99,9 @@ export function DashboardClient({
     setSelected(isGroupActive(g) ? new Set() : new Set(liveMembers(g)));
   };
 
-  const handleDelete = (acc: Account) => {
-    if (!confirm(`刪除 ${acc.displayName}（${acc.fcuNid}）？`)) return;
+  const handleToggleLock = (acc: Account) => {
     startTransition(async () => {
-      await deleteFcuAccount(acc.id);
-      setSelected((s) => {
-        const n = new Set(s);
-        n.delete(acc.id);
-        return n;
-      });
-    });
-  };
-
-  const handleAssign = (id: string, vaultId: string) => {
-    startTransition(async () => {
-      await assignAccountVault(id, vaultId || null);
+      await setAccountLocked(acc.id, !acc.isLocked);
     });
   };
 
@@ -125,75 +119,75 @@ export function DashboardClient({
         {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[60px]" />}
         {manageMode ? (
           <>
+            <div className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4">
+              <Avatar acc={a} />
+              <Name acc={a} />
+            </div>
             <button
               type="button"
-              onClick={() => handleDelete(a)}
+              onClick={() => handleToggleLock(a)}
               disabled={pending}
-              aria-label={`刪除 ${a.displayName}`}
-              className="flex items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+              aria-label={a.isLocked ? `解鎖 ${a.displayName}` : `上鎖 ${a.displayName}`}
+              className="flex shrink-0 items-center gap-1 self-stretch px-3 text-[13px] active:bg-[--fill]"
+              style={{ color: a.isLocked ? 'var(--tint)' : 'var(--label-3)' }}
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[--danger] text-sm font-bold text-white">
-                −
-              </span>
-              <Avatar acc={a} />
+              {a.isLocked ? <IconLock size={18} /> : <IconUnlock size={18} />}
+              {a.isLocked ? '已鎖' : '未鎖'}
             </button>
-            <div className="min-w-0 flex-1 py-2 pl-3">
-              <Name acc={a} />
-              <select
-                value={a.vaultId ?? ''}
-                onChange={(e) => handleAssign(a.id, e.target.value)}
-                disabled={pending}
-                className="mt-1 w-full rounded-md bg-[--fill] px-2 py-1 text-[12px] text-[--label] outline-none"
-                aria-label={`${a.displayName} 的分檔`}
+            {isAdmin && (
+              <Link
+                href={`/account/${a.id}/edit`}
+                aria-label={`編輯 ${a.displayName}`}
+                className="flex items-center self-stretch pr-4 pl-1 text-[--label-3] active:bg-[--fill]"
               >
-                <option value="">未分檔（只有管理員看得到）</option>
-                {vaults.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <IconChevronRight size={18} />
+              </Link>
+            )}
           </>
         ) : (
-          <button
-            type="button"
-            onClick={() => toggle(a.id)}
-            className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
-          >
-            <span
-              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 text-white transition"
-              style={{
-                borderColor: isSel ? 'var(--tint)' : 'var(--label-3)',
-                backgroundColor: isSel ? 'var(--tint)' : 'transparent',
-              }}
+          <>
+            <button
+              type="button"
+              onClick={() => toggle(a.id)}
+              className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
             >
-              {isSel && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2.5 6.2l2.2 2.2L9.5 3.6"
-                    stroke="white"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+              <span
+                className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 text-white transition"
+                style={{
+                  borderColor: isSel ? 'var(--tint)' : 'var(--label-3)',
+                  backgroundColor: isSel ? 'var(--tint)' : 'transparent',
+                }}
+              >
+                {isSel && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2.5 6.2l2.2 2.2L9.5 3.6"
+                      stroke="white"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </span>
+              <Avatar acc={a} />
+              <Name acc={a} />
+              {a.isLocked && (
+                <span className="shrink-0 text-[--label-3]" title="已上鎖">
+                  <IconLock size={15} />
+                </span>
               )}
-            </span>
-            <Avatar acc={a} />
-            <Name acc={a} />
-          </button>
-        )}
-        {!manageMode && health[a.id] && <HealthBadge status={health[a.id]} />}
-        {!manageMode && (
-          <Link
-            href={`/account/${a.id}`}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`${a.displayName} 的功能`}
-            className="flex items-center self-stretch pr-4 pl-2 text-[--label-3] active:bg-[--fill]"
-          >
-            <Chevron />
-          </Link>
+            </button>
+            {health[a.id] && <HealthBadge status={health[a.id]} />}
+            <Link
+              href={`/account/${a.id}`}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`${a.displayName} 的功能`}
+              className="flex items-center self-stretch pr-4 pl-2 text-[--label-3] active:bg-[--fill]"
+            >
+              <Chevron />
+            </Link>
+          </>
         )}
       </li>
     );
@@ -231,7 +225,7 @@ export function DashboardClient({
           )}
           {isAdmin && <Link href="/vaults">分檔</Link>}
           {isAdmin && <Link href="/logs">紀錄</Link>}
-          {isAdmin && accounts.length > 0 && (
+          {accounts.length > 0 && (
             <button type="button" onClick={() => setManageMode((m) => !m)} className="font-medium">
               {manageMode ? '完成' : '編輯'}
             </button>

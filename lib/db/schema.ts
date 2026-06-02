@@ -8,9 +8,10 @@ export const fcuAccounts = sqliteTable('fcu_accounts', {
   ciphertext: blob('ciphertext', { mode: 'buffer' }).notNull(),
   authTag: blob('auth_tag', { mode: 'buffer' }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
-  // Deprecated: superseded by the vault gate below. Kept as a dead column so
-  // the 0007 migration stays purely additive (no destructive drop on prod).
-  isHidden: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
+  // Locked accounts can still be clocked in, but viewing their details
+  // (/account/[id]) requires the admin password. Reuses the old is_hidden
+  // column so no migration is needed.
+  isLocked: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
   // Password vault this account belongs to. NULL = unassigned: only the admin
   // sees it until it's placed in a vault. See lib/vaults.ts for the gate.
   vaultId: text('vault_id'),
