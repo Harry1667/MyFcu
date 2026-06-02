@@ -15,6 +15,9 @@
 export const ADMIN_COOKIE = 'site_auth';
 export const VAULT_COOKIE = 'unlocked_vaults';
 
+/** Sentinel used as the unlock target when the admin tile is chosen. */
+export const ADMIN_TARGET = '__admin__';
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const buf = await crypto.subtle.digest('SHA-256', data);

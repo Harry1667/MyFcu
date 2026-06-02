@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { fcuAccounts, vaults } from '@/lib/db/schema';
 import {
   ADMIN_COOKIE,
+  ADMIN_TARGET,
   VAULT_COOKIE,
   adminToken,
   parseUnlocked,
@@ -30,12 +31,14 @@ const COOKIE_OPTS = {
 export type UnlockState = { error?: string } | null;
 
 /**
- * Single entry password. Admin PIN → admin cookie (see all + manage). Otherwise
- * a vault password → that vault's token is added to the unlocked set. Wrong →
- * error.
+ * Validate a password against a specific target chosen on the landing page.
+ * `vaultId` is either a real vault id (check that vault's password) or
+ * ADMIN_TARGET (check the admin PIN). On success sets the right cookie and
+ * redirects home; on failure returns an error.
  */
 export async function unlock(_prev: UnlockState, formData: FormData): Promise<UnlockState> {
   const pw = String(formData.get('password') ?? '').trim();
+  const target = String(formData.get('vaultId') ?? '');
   if (!pw) return { error: '請輸入密碼' };
 
   const token = await tokenFor(pw);
@@ -43,20 +46,22 @@ export async function unlock(_prev: UnlockState, formData: FormData): Promise<Un
 
   const jar = await cookies();
 
-  // Admin?
-  const admin = await adminToken();
-  if (admin && token === admin) {
-    jar.set(ADMIN_COOKIE, token, COOKIE_OPTS);
-    redirect('/');
+  if (target === ADMIN_TARGET) {
+    const admin = await adminToken();
+    if (admin && token === admin) {
+      jar.set(ADMIN_COOKIE, token, COOKIE_OPTS);
+      redirect('/');
+    }
+    return { error: '管理員密碼不正確' };
   }
 
-  // A vault?
-  const match = await db
-    .select({ id: vaults.id })
+  // A specific vault tile was tapped — the password must match that vault.
+  const [v] = await db
+    .select({ passToken: vaults.passToken })
     .from(vaults)
-    .where(eq(vaults.passToken, token))
+    .where(eq(vaults.id, target))
     .limit(1);
-  if (match.length > 0) {
+  if (v && v.passToken === token) {
     const unlocked = parseUnlocked(jar.get(VAULT_COOKIE)?.value);
     unlocked.add(token);
     jar.set(VAULT_COOKIE, serializeUnlocked(unlocked), COOKIE_OPTS);
@@ -79,11 +84,12 @@ const pwSchema = z.string().trim().min(1, '請輸入密碼').max(64);
 
 export type VaultFormState = { ok: boolean; error?: string } | null;
 
+// Open by design: anyone can create a (empty) group from the landing page.
+// Adding real accounts to it stays admin-only.
 export async function createVault(
   _prev: VaultFormState,
   formData: FormData,
 ): Promise<VaultFormState> {
-  await requireAdmin();
   const name = nameSchema.safeParse(formData.get('name'));
   const pw = pwSchema.safeParse(formData.get('password'));
   if (!name.success) return { ok: false, error: name.error.issues[0]?.message };
@@ -110,6 +116,7 @@ export async function createVault(
   await logActivity('vault_create', `建立分檔：${name.data}`);
   revalidatePath('/');
   revalidatePath('/vaults');
+  revalidatePath('/unlock');
   return { ok: true };
 }
 
