@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { deleteFcuAccount } from '@/lib/actions/accounts';
 import { assignAccountVault, lockAll } from '@/lib/actions/vaults';
 import { checkAccountHealth } from '@/lib/actions/fcu-features';
+import { IconPlus } from '@/app/icons';
 
 type Health = 'checking' | 'valid' | 'invalid' | 'error';
 
@@ -303,8 +304,8 @@ export function DashboardClient({
                 href="/accounts/new"
                 className="ios-card mt-1 flex items-center gap-2 px-4 py-3 text-[17px] text-[--tint]"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-lg leading-none text-white">
-                  ＋
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-white">
+                  <IconPlus size={18} />
                 </span>
                 新增帳號
               </Link>

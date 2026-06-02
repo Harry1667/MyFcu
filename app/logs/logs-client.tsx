@@ -2,6 +2,16 @@
 
 import { useState, useTransition } from 'react';
 import { clearActivity, clearLogs } from '@/lib/actions/logs';
+import {
+  IconCamera,
+  IconKey,
+  IconLock,
+  IconPencil,
+  IconRefresh,
+  IconTrash,
+  IconUserPlus,
+  IconUsers,
+} from '@/app/icons';
 
 const ACTIVITY_LABEL: Record<Activity['type'], string> = {
   clockin: '打卡',
@@ -73,17 +83,17 @@ type Activity = {
   createdAt: Date;
 };
 
-const ACTIVITY_ICON: Record<Activity['type'], string> = {
-  clockin: '📷',
-  account_add: '➕',
-  account_update: '🔁',
-  account_delete: '🗑️',
-  group_create: '👥',
-  group_update: '✏️',
-  group_delete: '🗑️',
-  vault_create: '🔒',
-  vault_update: '🔑',
-  vault_delete: '🗑️',
+const ACTIVITY_ICON: Record<Activity['type'], (p: { size?: number }) => React.ReactNode> = {
+  clockin: IconCamera,
+  account_add: IconUserPlus,
+  account_update: IconRefresh,
+  account_delete: IconTrash,
+  group_create: IconUsers,
+  group_update: IconPencil,
+  group_delete: IconTrash,
+  vault_create: IconLock,
+  vault_update: IconKey,
+  vault_delete: IconTrash,
 };
 
 function avatarColor(seed: string) {
@@ -106,7 +116,7 @@ function timeAgo(d: Date) {
 function itemBadge(item: Item) {
   if (item.status === 'failed') return { color: 'var(--danger)', label: '送出失敗' };
   if (item.verified === true) return { color: 'var(--tint)', label: '✓ 已記錄' };
-  if (item.verified === false) return { color: 'var(--amber)', label: '⚠️ 未確認' };
+  if (item.verified === false) return { color: 'var(--amber)', label: '未確認' };
   return { color: 'var(--label-2)', label: '已送出' };
 }
 
@@ -218,7 +228,7 @@ export function LogsClient({
                 </div>
                 <div className="flex items-center gap-1.5">
                   {verified > 0 && <Pill color="var(--tint)">✓ {verified}</Pill>}
-                  {unverified > 0 && <Pill color="var(--amber)">⚠️ {unverified}</Pill>}
+                  {unverified > 0 && <Pill color="var(--amber)">{unverified} 未確認</Pill>}
                   {failed > 0 && <Pill color="var(--danger)">✗ {failed}</Pill>}
                   <span className={`text-[--label-3] transition ${isOpen ? 'rotate-90' : ''}`}>
                     <svg width="8" height="13" viewBox="0 0 9 15" fill="none">
@@ -355,7 +365,12 @@ function ActivityFeed({ activities }: { activities: Activity[] }) {
               onClick={() => hasDetail && toggle(a.id)}
               className="flex w-full items-start gap-3 px-4 py-2.5 text-left active:bg-[--fill]"
             >
-              <span className="mt-0.5 text-[18px] leading-none">{ACTIVITY_ICON[a.type]}</span>
+              <span className="mt-0.5 text-[--label-2]">
+                {(() => {
+                  const Icon = ACTIVITY_ICON[a.type];
+                  return <Icon size={18} />;
+                })()}
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] text-[--label]">{a.summary}</span>
                 <span className="block text-[12px] text-[--label-2]">

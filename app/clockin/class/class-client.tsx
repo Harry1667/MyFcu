@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { logScanAttempts, type LogEntry } from '@/lib/actions/logs';
 import { verifyAccount } from '@/lib/actions/verify';
+import {
+  IconCamera,
+  IconCameraSwitch,
+  IconChevronLeft,
+  IconFlashlight,
+  IconWarning,
+} from '@/app/icons';
 
 type Account = {
   id: string;
@@ -405,10 +412,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
       <header className="flex items-center justify-between pt-2">
-        <h1 className="text-[17px] font-semibold text-[--label]">掃 QR 打卡</h1>
-        <Link href="/" className="text-[17px] text-[--tint]">
-          取消
+        <Link href="/" className="-ml-1 flex w-fit items-center text-[17px] text-[--tint]">
+          <IconChevronLeft size={22} />
+          首頁
         </Link>
+        <h1 className="text-[17px] font-semibold text-[--label]">掃 QR 打卡</h1>
+        <span className="w-12" />
       </header>
 
       <p className="mt-3 text-[15px] text-[--label-2]">
@@ -416,22 +425,26 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       </p>
 
       {inApp && (
-        <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
-          ⚠️ 你在 App 內建瀏覽器（LINE／IG／FB…）開啟，相機常常打不開。
-          建議用 <b>Safari / Chrome</b> 開這個網址；或直接用下方的「📸 拍照辨識」，不需要開相機權限。
+        <div className="mt-3 flex items-start gap-2 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
+          <IconWarning size={18} className="mt-0.5 shrink-0 text-[--amber]" />
+          <span>
+            你在 App 內建瀏覽器（LINE／IG／FB…）開啟，相機常常打不開。
+            建議用 <b>Safari / Chrome</b> 開這個網址；或直接用下方的「拍照辨識」，不需要開相機權限。
+          </span>
         </div>
       )}
 
       {isIOS && !inApp && phase === 'preflight' && (
         <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
-          📱 iPhone 對著螢幕／投影的 QR，<b>即時掃描常常掃不到</b>（Safari 沒有原生掃碼，只能用網頁慢慢解）。
-          請直接用下方的 <b>📸 拍照打卡</b>，或用 iPhone 內建相機掃完再「手動貼上」，都比即時掃描穩。
+          iPhone 對著螢幕／投影的 QR，<b>即時掃描常常掃不到</b>（Safari 沒有原生掃碼，只能用網頁慢慢解）。
+          請直接用下方的 <b>拍照打卡</b>，或用 iPhone 內建相機掃完再「手動貼上」，都比即時掃描穩。
         </div>
       )}
 
       {error && (
-        <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
-          ⚠️ {error}
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-[--fill] px-4 py-3 text-[15px] text-[--danger]">
+          <IconWarning size={18} className="shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -463,19 +476,21 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           <button
             type="button"
             onClick={switchCamera}
-            className="rounded-full bg-[--fill] px-4 py-2 text-[14px] font-medium text-[--label] active:opacity-70"
+            className="flex items-center gap-1.5 rounded-full bg-[--fill] px-4 py-2 text-[14px] font-medium text-[--label] active:opacity-70"
           >
-            🔄 切換鏡頭（{facing === 'environment' ? '後' : '前'}）
+            <IconCameraSwitch size={16} />
+            切換鏡頭（{facing === 'environment' ? '後' : '前'}）
           </button>
           {torch.available && (
             <button
               type="button"
               onClick={toggleTorch}
-              className={`rounded-full px-4 py-2 text-[14px] font-medium active:opacity-70 ${
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-[14px] font-medium active:opacity-70 ${
                 torch.on ? 'bg-[--tint] text-white' : 'bg-[--fill] text-[--label]'
               }`}
             >
-              {torch.on ? '💡 關燈' : '🔦 開燈'}
+              <IconFlashlight size={16} />
+              {torch.on ? '關燈' : '開燈'}
             </button>
           )}
         </div>
@@ -500,14 +515,17 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           >
             {photoPrimary ? (
               <>
-                <span className="text-[34px] leading-none">📸</span>
+                <IconCamera size={34} />
                 拍照打卡
                 <span className="text-[13px] font-normal opacity-85">
                   {isIOS ? 'iPhone 最準' : '最穩，免相機權限'}
                 </span>
               </>
             ) : (
-              '📸 拍照辨識（免相機權限，最穩）'
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <IconCamera size={18} />
+                拍照辨識（免相機權限，最穩）
+              </span>
             )}
             <input
               type="file"
@@ -608,8 +626,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {phase === 'done' && (
         <div className="mt-6 space-y-3">
           {results.some((r) => r.status === 'unverified' || r.status === 'failed') && (
-            <div className="rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label-2]">
-              ⚠️ 有未確認 / 失敗的帳號。可以到 <Link href="/logs" className="font-medium text-[--tint]">紀錄</Link> 看詳細，或開 FCU app 自己確認。
+            <div className="flex items-start gap-2 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label-2]">
+              <IconWarning size={18} className="mt-0.5 shrink-0 text-[--amber]" />
+              <span>
+                有未確認 / 失敗的帳號。可以到{' '}
+                <Link href="/logs" className="font-medium text-[--tint]">紀錄</Link> 看詳細，或開 FCU app 自己確認。
+              </span>
             </div>
           )}
           <div className="flex gap-3">
@@ -637,8 +659,8 @@ function StatusBadge({ status }: { status: ResultStatus | 'waiting' }) {
     sent: { color: 'var(--tint)', label: '已送出' },
     failed: { color: 'var(--danger)', label: '失敗' },
     verifying: { color: '#0a84ff', label: '驗證中…' },
-    verified: { color: 'var(--tint)', label: '✓ 已記錄' },
-    unverified: { color: 'var(--amber)', label: '⚠️ 未確認' },
+    verified: { color: 'var(--tint)', label: '已記錄' },
+    unverified: { color: 'var(--amber)', label: '未確認' },
   };
   const s = map[status];
   return (

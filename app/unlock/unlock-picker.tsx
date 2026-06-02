@@ -8,6 +8,7 @@ import {
   type UnlockState,
   type VaultFormState,
 } from '@/lib/actions/vaults';
+import { IconChevronDown, IconLock, IconPlus, IconShield } from '@/app/icons';
 
 type Vault = { id: string; name: string };
 
@@ -54,9 +55,13 @@ export function UnlockPicker({ vaults }: { vaults: Vault[] }) {
                     {v.name.slice(0, 1)}
                   </span>
                   <span className="flex-1 truncate text-[17px] text-[--label]">{v.name}</span>
-                  <span className="text-[--label-3]">{open === v.id ? '▾' : '🔒'}</span>
+                  <span className="text-[--label-3]">
+                    {open === v.id ? <IconChevronDown size={18} /> : <IconLock size={17} />}
+                  </span>
                 </button>
-                {open === v.id && <PasswordForm vaultId={v.id} placeholder={`${v.name} 的密碼`} />}
+                {open === v.id && (
+                  <PasswordForm vaultId={v.id} username={v.name} placeholder={`${v.name} 的密碼`} />
+                )}
               </li>
             ))}
           </ul>
@@ -71,8 +76,8 @@ export function UnlockPicker({ vaults }: { vaults: Vault[] }) {
               onClick={() => setOpen((o) => (o === '__new__' ? null : '__new__'))}
               className="flex w-full items-center gap-2 px-4 py-3 text-left text-[17px] text-[--tint] active:bg-[--fill]"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-lg leading-none text-white">
-                ＋
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-white">
+                <IconPlus size={18} />
               </span>
               新增群組
             </button>
@@ -89,13 +94,17 @@ export function UnlockPicker({ vaults }: { vaults: Vault[] }) {
               onClick={() => setOpen((o) => (o === ADMIN_TARGET ? null : ADMIN_TARGET))}
               className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-[--fill]"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[--label-2] text-base text-white">
-                🛠
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[--label-2] text-white">
+                <IconShield size={18} />
               </span>
               <span className="flex-1 text-[17px] text-[--label]">管理員</span>
-              <span className="text-[--label-3]">{open === ADMIN_TARGET ? '▾' : '🔒'}</span>
+              <span className="text-[--label-3]">
+                {open === ADMIN_TARGET ? <IconChevronDown size={18} /> : <IconLock size={17} />}
+              </span>
             </button>
-            {open === ADMIN_TARGET && <PasswordForm vaultId={ADMIN_TARGET} placeholder="管理員密碼" />}
+            {open === ADMIN_TARGET && (
+              <PasswordForm vaultId={ADMIN_TARGET} username="管理員" placeholder="管理員密碼" />
+            )}
           </li>
         </ul>
       </section>
@@ -103,18 +112,37 @@ export function UnlockPicker({ vaults }: { vaults: Vault[] }) {
   );
 }
 
-function PasswordForm({ vaultId, placeholder }: { vaultId: string; placeholder: string }) {
+function PasswordForm({
+  vaultId,
+  username,
+  placeholder,
+}: {
+  vaultId: string;
+  username: string;
+  placeholder: string;
+}) {
   const [state, formAction, pending] = useActionState<UnlockState, FormData>(unlock, null);
   return (
     <form action={formAction} className="space-y-2 px-4 pb-3">
       <input type="hidden" name="vaultId" value={vaultId} />
+      {/* Identifies which group's password this is, so the browser's password
+          manager can save/autofill it per group. */}
+      <input
+        type="text"
+        name="username"
+        value={username}
+        readOnly
+        autoComplete="username"
+        tabIndex={-1}
+        aria-hidden
+        className="sr-only"
+      />
       <input
         name="password"
         type="password"
-        inputMode="numeric"
         autoFocus
         required
-        autoComplete="off"
+        autoComplete="current-password"
         placeholder={placeholder}
         className="ios-input text-center text-[18px] tracking-[0.25em]"
       />
@@ -135,7 +163,7 @@ function NewGroupForm() {
         name="password"
         required
         maxLength={64}
-        autoComplete="off"
+        autoComplete="new-password"
         placeholder="設定群組密碼"
         className="ios-input"
       />
