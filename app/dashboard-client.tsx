@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { deleteFcuAccount } from '@/lib/actions/accounts';
 import { assignAccountVault, lockAll } from '@/lib/actions/vaults';
 import { checkAccountHealth } from '@/lib/actions/fcu-features';
-import { IconPlus } from '@/app/icons';
+import { IconLock, IconPlus } from '@/app/icons';
 
 type Health = 'checking' | 'valid' | 'invalid' | 'error';
 
@@ -201,7 +201,19 @@ export function DashboardClient({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
-      <header className="flex items-end justify-between pt-3">
+      <div className="pt-2">
+        <form action={lockAll}>
+          <button
+            type="submit"
+            className="-ml-1 flex items-center gap-1 text-[15px] text-[--tint] active:opacity-60"
+          >
+            <IconLock size={16} />
+            鎖定離開
+          </button>
+        </form>
+      </div>
+
+      <header className="mt-1.5 flex items-end justify-between">
         <div>
           <h1 className="ios-title">逢甲打卡</h1>
           {!isAdmin && vaults.length > 0 && (
@@ -313,16 +325,6 @@ export function DashboardClient({
           </>
         )}
 
-        {!manageMode && (
-          <div className="mt-6 flex flex-col items-center gap-2 text-[14px] text-[--label-2]">
-            <Link href="/unlock">輸入其他分檔密碼</Link>
-            <form action={lockAll}>
-              <button type="submit" className="text-[--label-3]">
-                鎖定離開
-              </button>
-            </form>
-          </div>
-        )}
       </section>
 
       {accounts.length > 0 && (
