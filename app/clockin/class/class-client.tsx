@@ -396,10 +396,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setPhase('preflight');
   };
 
-  // On iPhone the live scanner can't read a screen QR, so the still-photo
-  // capture is the real action — show it as the filled primary button while
-  // we're still on the preflight screen.
-  const photoPrimary = isIOS && phase === 'preflight';
+  // Photo capture is the recommended path on every device (a sharp still
+  // decodes a screen/projector QR far better than the live stream), so on the
+  // preflight screen it's the big hero button and live scanning is a small
+  // link. On iPhone it's also the *only* reliable path (no native scanner).
+  const photoPrimary = phase === 'preflight';
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -493,11 +494,21 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           <label
             className={
               photoPrimary
-                ? 'ios-btn flex w-full cursor-pointer items-center justify-center gap-2'
+                ? 'ios-btn flex w-full cursor-pointer flex-col items-center justify-center gap-1 py-7 text-[20px]'
                 : 'ios-card block w-full cursor-pointer py-3 text-center text-[15px] font-medium text-[--tint] active:opacity-70'
             }
           >
-            {photoPrimary ? '📸 拍照打卡（iPhone 最準）' : '📸 拍照辨識（免相機權限，最穩）'}
+            {photoPrimary ? (
+              <>
+                <span className="text-[34px] leading-none">📸</span>
+                拍照打卡
+                <span className="text-[13px] font-normal opacity-85">
+                  {isIOS ? 'iPhone 最準' : '最穩，免相機權限'}
+                </span>
+              </>
+            ) : (
+              '📸 拍照辨識（免相機權限，最穩）'
+            )}
             <input
               type="file"
               accept="image/*"
@@ -541,25 +552,13 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         </div>
       )}
 
-      {phase === 'preflight' && !isIOS && (
-        <div className="mt-6 space-y-3">
-          <div className="ios-card flex flex-col items-center gap-2 py-14 text-[--label-2]">
-            <span className="text-4xl">📷</span>
-            <div className="text-[15px]">需要使用相機</div>
-          </div>
-          <button type="button" onClick={startCamera} className="ios-btn">
-            啟用相機
-          </button>
-        </div>
-      )}
-
-      {phase === 'preflight' && isIOS && (
+      {phase === 'preflight' && (
         <button
           type="button"
           onClick={startCamera}
-          className="mt-3 w-full py-2 text-center text-[14px] text-[--label-2] active:opacity-60"
+          className="mt-3 w-full py-2 text-center text-[13px] text-[--label-3] active:opacity-60"
         >
-          還是想試即時掃描？開啟相機
+          {isIOS ? '還是想試即時掃描？開啟相機' : '改用即時掃碼'}
         </button>
       )}
 
