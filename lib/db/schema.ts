@@ -8,6 +8,9 @@ export const fcuAccounts = sqliteTable('fcu_accounts', {
   ciphertext: blob('ciphertext', { mode: 'buffer' }).notNull(),
   authTag: blob('auth_tag', { mode: 'buffer' }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
+  // UI-level privacy: hidden accounts are filtered out of the dashboard unless
+  // the visitor has presented the reveal code (see lib/hidden-accounts.ts).
+  isHidden: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
@@ -47,6 +50,7 @@ export const activityLogs = sqliteTable(
       enum: [
         'clockin',
         'account_add',
+        'account_update',
         'account_delete',
         'group_create',
         'group_update',

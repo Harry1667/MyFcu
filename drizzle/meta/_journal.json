@@ -43,6 +43,13 @@
       "when": 1780338245597,
       "tag": "0005_dashing_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1780383167218,
+      "tag": "0006_heavy_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

@@ -52,6 +52,22 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
   redirect('/');
 }
 
+export async function setAccountHidden(id: string, hidden: boolean) {
+  const [acc] = await db
+    .select({ displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })
+    .from(fcuAccounts)
+    .where(eq(fcuAccounts.id, id))
+    .limit(1);
+  await db.update(fcuAccounts).set({ isHidden: hidden }).where(eq(fcuAccounts.id, id));
+  if (acc) {
+    await logActivity(
+      'account_update',
+      `${hidden ? '隱藏' : '取消隱藏'}帳號：${acc.displayName}（${acc.fcuNid}）`,
+    );
+  }
+  revalidatePath('/');
+}
+
 export async function deleteFcuAccount(id: string) {
   const [acc] = await db
     .select({ displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })

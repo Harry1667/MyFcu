@@ -6,6 +6,7 @@ import { clearActivity, clearLogs } from '@/lib/actions/logs';
 const ACTIVITY_LABEL: Record<Activity['type'], string> = {
   clockin: '打卡',
   account_add: '新增帳號',
+  account_update: '更新帳號',
   account_delete: '刪除帳號',
   group_create: '建立群組',
   group_update: '修改群組',
@@ -56,6 +57,7 @@ type Activity = {
   type:
     | 'clockin'
     | 'account_add'
+    | 'account_update'
     | 'account_delete'
     | 'group_create'
     | 'group_update'
@@ -68,6 +70,7 @@ type Activity = {
 const ACTIVITY_ICON: Record<Activity['type'], string> = {
   clockin: '📷',
   account_add: '➕',
+  account_update: '🔁',
   account_delete: '🗑️',
   group_create: '👥',
   group_update: '✏️',

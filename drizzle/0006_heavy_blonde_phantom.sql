@@ -1,0 +1,1 @@
+ALTER TABLE `fcu_accounts` ADD `is_hidden` integer DEFAULT false NOT NULL;
