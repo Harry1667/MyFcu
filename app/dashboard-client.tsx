@@ -29,16 +29,35 @@ export function DashboardClient({
   vaults: Vault[];
   groups: Group[];
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Members open one group to clock everyone in, so pre-select all of their
+  // accounts — one tap to scan. Admin sees many across vaults, so start empty.
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(isAdmin ? [] : accounts.map((a) => a.id)),
+  );
   const [manageMode, setManageMode] = useState(false);
   const [pending, startTransition] = useTransition();
   const [health, setHealth] = useState<Record<string, Health>>({});
   const [checking, setChecking] = useState(false);
 
-  const vaultName = useMemo(() => {
-    const m = new Map(vaults.map((v) => [v.id, v.name]));
-    return (id: string | null) => (id ? m.get(id) ?? null : null);
-  }, [vaults]);
+  // Accounts grouped into vault sections (+ an "未分檔" bucket admin-only),
+  // so the list reads as "this group's people" instead of a flat mix.
+  const sections = useMemo(() => {
+    const byVault = new Map<string, Account[]>();
+    for (const a of accounts) {
+      const k = a.vaultId ?? '__none__';
+      const arr = byVault.get(k);
+      if (arr) arr.push(a);
+      else byVault.set(k, [a]);
+    }
+    const out: { key: string; name: string; accounts: Account[] }[] = [];
+    for (const v of vaults) {
+      const arr = byVault.get(v.id);
+      if (arr) out.push({ key: v.id, name: v.name, accounts: arr });
+    }
+    const none = byVault.get('__none__');
+    if (none) out.push({ key: '__none__', name: '未分檔', accounts: none });
+    return out;
+  }, [accounts, vaults]);
 
   const runHealthCheck = () => {
     if (checking) return;
@@ -99,6 +118,87 @@ export function DashboardClient({
   const startDisabled = selectedIds.length === 0 || manageMode;
 
   const groupsWithMembers = groups.filter((g) => liveMembers(g).length > 0);
+
+  const renderRow = (a: Account, i: number) => {
+    const isSel = selected.has(a.id);
+    return (
+      <li key={a.id} className="relative flex items-center">
+        {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[60px]" />}
+        {manageMode ? (
+          <>
+            <button
+              type="button"
+              onClick={() => handleDelete(a)}
+              disabled={pending}
+              aria-label={`刪除 ${a.displayName}`}
+              className="flex items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[--danger] text-sm font-bold text-white">
+                −
+              </span>
+              <Avatar acc={a} />
+            </button>
+            <div className="min-w-0 flex-1 py-2 pl-3">
+              <Name acc={a} />
+              <select
+                value={a.vaultId ?? ''}
+                onChange={(e) => handleAssign(a.id, e.target.value)}
+                disabled={pending}
+                className="mt-1 w-full rounded-md bg-[--fill] px-2 py-1 text-[12px] text-[--label] outline-none"
+                aria-label={`${a.displayName} 的分檔`}
+              >
+                <option value="">未分檔（只有管理員看得到）</option>
+                {vaults.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => toggle(a.id)}
+            className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+          >
+            <span
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 text-white transition"
+              style={{
+                borderColor: isSel ? 'var(--tint)' : 'var(--label-3)',
+                backgroundColor: isSel ? 'var(--tint)' : 'transparent',
+              }}
+            >
+              {isSel && (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M2.5 6.2l2.2 2.2L9.5 3.6"
+                    stroke="white"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </span>
+            <Avatar acc={a} />
+            <Name acc={a} />
+          </button>
+        )}
+        {!manageMode && health[a.id] && <HealthBadge status={health[a.id]} />}
+        {!manageMode && (
+          <Link
+            href={`/account/${a.id}`}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`${a.displayName} 的功能`}
+            className="flex items-center self-stretch pr-4 pl-2 text-[--label-3] active:bg-[--fill]"
+          >
+            <Chevron />
+          </Link>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
@@ -188,93 +288,22 @@ export function DashboardClient({
           )
         ) : (
           <>
-            <ul className="ios-card">
-              {accounts.map((a, i) => {
-                const isSel = selected.has(a.id);
-                return (
-                  <li key={a.id} className="relative flex items-center">
-                    {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[60px]" />}
-                    {manageMode ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(a)}
-                          disabled={pending}
-                          aria-label={`刪除 ${a.displayName}`}
-                          className="flex items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[--danger] text-sm font-bold text-white">
-                            −
-                          </span>
-                          <Avatar acc={a} />
-                        </button>
-                        <div className="min-w-0 flex-1 py-2 pl-3">
-                          <Name acc={a} />
-                          <select
-                            value={a.vaultId ?? ''}
-                            onChange={(e) => handleAssign(a.id, e.target.value)}
-                            disabled={pending}
-                            className="mt-1 w-full rounded-md bg-[--fill] px-2 py-1 text-[12px] text-[--label] outline-none"
-                            aria-label={`${a.displayName} 的分檔`}
-                          >
-                            <option value="">未分檔（只有管理員看得到）</option>
-                            {vaults.map((v) => (
-                              <option key={v.id} value={v.id}>
-                                {v.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => toggle(a.id)}
-                        className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
-                      >
-                        <span
-                          className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 text-white transition"
-                          style={{
-                            borderColor: isSel ? 'var(--tint)' : 'var(--label-3)',
-                            backgroundColor: isSel ? 'var(--tint)' : 'transparent',
-                          }}
-                        >
-                          {isSel && (
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                              <path
-                                d="M2.5 6.2l2.2 2.2L9.5 3.6"
-                                stroke="white"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          )}
-                        </span>
-                        <Avatar acc={a} />
-                        <Name acc={a} vault={isAdmin ? vaultName(a.vaultId) : null} />
-                      </button>
-                    )}
-                    {!manageMode && health[a.id] && <HealthBadge status={health[a.id]} />}
-                    {!manageMode && (
-                      <Link
-                        href={`/account/${a.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`${a.displayName} 的功能`}
-                        className="flex items-center self-stretch pr-4 pl-2 text-[--label-3] active:bg-[--fill]"
-                      >
-                        <Chevron />
-                      </Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            {sections.map((s) => (
+              <div key={s.key} className="mb-4">
+                {(isAdmin || sections.length > 1) && (
+                  <div className="ios-section">
+                    {s.name}
+                    {isAdmin && ` · ${s.accounts.length}`}
+                  </div>
+                )}
+                <ul className="ios-card">{s.accounts.map((a, i) => renderRow(a, i))}</ul>
+              </div>
+            ))}
 
             {isAdmin && !manageMode && (
               <Link
                 href="/accounts/new"
-                className="ios-card mt-4 flex items-center gap-2 px-4 py-3 text-[17px] text-[--tint]"
+                className="ios-card mt-1 flex items-center gap-2 px-4 py-3 text-[17px] text-[--tint]"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[--tint] text-lg leading-none text-white">
                   ＋
@@ -326,25 +355,11 @@ function Avatar({ acc }: { acc: Account }) {
   );
 }
 
-function Name({ acc, vault }: { acc: Account; vault?: string | null }) {
+function Name({ acc }: { acc: Account }) {
   return (
     <span className="min-w-0 flex-1">
-      <span className="flex items-center gap-1.5 truncate text-[17px] text-[--label]">
-        {acc.displayName}
-        {vault !== undefined && <VaultBadge name={vault} />}
-      </span>
+      <span className="block truncate text-[17px] text-[--label]">{acc.displayName}</span>
       <span className="block font-mono text-[12px] text-[--label-2]">{acc.fcuNid}</span>
-    </span>
-  );
-}
-
-function VaultBadge({ name }: { name: string | null }) {
-  return (
-    <span
-      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[--fill] px-1.5 text-[11px] text-[--label-2]"
-      title={name ? `分檔：${name}` : '未分檔'}
-    >
-      {name ?? '未分檔'}
     </span>
   );
 }

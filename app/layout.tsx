@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: '逢甲打卡',
   description: 'FCU 多帳號打卡工具',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: '逢甲打卡' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: '逢甲打卡' },
   icons: {
     icon: '/icon-192.png',
     apple: '/icon-180.png',
