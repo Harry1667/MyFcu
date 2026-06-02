@@ -233,38 +233,45 @@ export function DashboardClient({
         </div>
       </header>
 
-      {accounts.length > 0 && !manageMode && groupsWithMembers.length > 0 && (
+      {accounts.length > 0 && !manageMode && (
         <section className="mt-6">
           <div className="ios-section flex items-end justify-between">
             <span>課程群組</span>
-            {isAdmin && (
-              <Link href="/groups" className="text-[--tint]">
-                管理
-              </Link>
-            )}
+            <Link href="/groups" className="text-[--tint]">
+              管理
+            </Link>
           </div>
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            {groupsWithMembers.map((g) => {
-              const active = isGroupActive(g);
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => selectGroup(g)}
-                  className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
-                  style={{
-                    backgroundColor: active ? 'var(--tint)' : 'var(--bg-elevated)',
-                    color: active ? '#fff' : 'var(--label)',
-                  }}
-                >
-                  {g.name}
-                  <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-[--label-3]'}>
-                    {liveMembers(g).length}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {groupsWithMembers.length > 0 ? (
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              {groupsWithMembers.map((g) => {
+                const active = isGroupActive(g);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => selectGroup(g)}
+                    className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
+                    style={{
+                      backgroundColor: active ? 'var(--tint)' : 'var(--bg-elevated)',
+                      color: active ? '#fff' : 'var(--label)',
+                    }}
+                  >
+                    {g.name}
+                    <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-[--label-3]'}>
+                      {liveMembers(g).length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <Link
+              href="/groups"
+              className="ios-card flex items-center gap-2 px-4 py-3 text-[15px] text-[--tint]"
+            >
+              ＋ 建立課程群組，一鍵選取整組同學
+            </Link>
+          )}
         </section>
       )}
 

@@ -1,0 +1,1 @@
+ALTER TABLE `account_groups` ADD `vault_id` text;

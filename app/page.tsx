@@ -43,12 +43,17 @@ export default async function HomePage() {
   // Non-admin with nothing unlocked (e.g. forged/empty cookie) → back to unlock.
   if (!isAdmin && visibleVaults.length === 0) redirect('/unlock');
 
+  // Course groups belong to a vault; show only those for vaults this visitor sees.
+  const visibleGroups = isAdmin
+    ? groups
+    : groups.filter((g) => g.vaultId != null && visibleVaultIds.has(g.vaultId));
+
   return (
     <DashboardClient
       isAdmin={isAdmin}
       accounts={accounts}
       vaults={visibleVaults.map((v) => ({ id: v.id, name: v.name }))}
-      groups={groups.map((g) => ({ id: g.id, name: g.name, memberIds: g.memberIds }))}
+      groups={visibleGroups.map((g) => ({ id: g.id, name: g.name, memberIds: g.memberIds }))}
     />
   );
 }

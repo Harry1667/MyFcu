@@ -12,6 +12,7 @@ import {
 
 type Account = { id: string; displayName: string; fcuNid: string };
 type Group = { id: string; name: string; memberIds: string[] };
+type Vault = { id: string; name: string };
 
 function avatarColor(seed: string) {
   let h = 0;
@@ -22,9 +23,13 @@ function avatarColor(seed: string) {
 export function GroupsManager({
   accounts,
   groups,
+  currentVault,
+  vaults,
 }: {
   accounts: Account[];
   groups: Group[];
+  currentVault: Vault;
+  vaults: Vault[];
 }) {
   // null = list view; 'new' = creating; otherwise editing that group id.
   const [editing, setEditing] = useState<string | null>(null);
@@ -58,11 +63,30 @@ export function GroupsManager({
         把同一堂課的同學分成一組，打卡時一鍵選取整組。
       </p>
 
+      {vaults.length > 1 && editing === null && (
+        <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4">
+          {vaults.map((v) => (
+            <Link
+              key={v.id}
+              href={`/groups?vault=${v.id}`}
+              className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
+              style={{
+                backgroundColor: v.id === currentVault.id ? 'var(--tint)' : 'var(--bg-elevated)',
+                color: v.id === currentVault.id ? '#fff' : 'var(--label)',
+              }}
+            >
+              {v.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {editing !== null ? (
         <GroupEditor
           key={editing}
           accounts={accounts}
           group={editingGroup}
+          vaultId={currentVault.id}
           onDone={() => setEditing(null)}
         />
       ) : accounts.length === 0 ? (
@@ -119,10 +143,12 @@ export function GroupsManager({
 function GroupEditor({
   accounts,
   group,
+  vaultId,
   onDone,
 }: {
   accounts: Account[];
   group: Group | null;
+  vaultId: string;
   onDone: () => void;
 }) {
   const isNew = group === null;
@@ -148,6 +174,7 @@ function GroupEditor({
 
   return (
     <form action={formAction} className="mt-6 space-y-6">
+      <input type="hidden" name="vaultId" value={vaultId} />
       <div className="space-y-1.5">
         <label htmlFor="name" className="ios-section block">
           群組名稱

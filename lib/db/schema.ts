@@ -53,6 +53,8 @@ export const accountGroups = sqliteTable('account_groups', {
   name: text('name').notNull(),
   // JSON array of fcu_accounts.id. Dead ids (deleted accounts) are filtered on read.
   memberIds: text('member_ids', { mode: 'json' }).$type<string[]>().notNull(),
+  // Which vault this course group belongs to. Members of that vault manage it.
+  vaultId: text('vault_id'),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
