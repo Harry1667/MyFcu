@@ -11,6 +11,9 @@ const ACTIVITY_LABEL: Record<Activity['type'], string> = {
   group_create: '建立群組',
   group_update: '修改群組',
   group_delete: '刪除群組',
+  vault_create: '建立分檔',
+  vault_update: '更新分檔',
+  vault_delete: '刪除分檔',
 };
 
 /** Build a UTF-8 CSV (with BOM so Excel renders Chinese) and trigger a download. */
@@ -61,7 +64,10 @@ type Activity = {
     | 'account_delete'
     | 'group_create'
     | 'group_update'
-    | 'group_delete';
+    | 'group_delete'
+    | 'vault_create'
+    | 'vault_update'
+    | 'vault_delete';
   summary: string;
   detail: string | null;
   createdAt: Date;
@@ -75,6 +81,9 @@ const ACTIVITY_ICON: Record<Activity['type'], string> = {
   group_create: '👥',
   group_update: '✏️',
   group_delete: '🗑️',
+  vault_create: '🔒',
+  vault_update: '🔑',
+  vault_delete: '🗑️',
 };
 
 function avatarColor(seed: string) {

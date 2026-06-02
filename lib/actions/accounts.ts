@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { fcuAccounts } from '@/lib/db/schema';
 import { encryptCredential } from '@/lib/crypto/encryption';
+import { requireAdmin } from '@/lib/auth-guard';
 import { logActivity } from '@/lib/activity-log';
 
 export type FormState = { ok: boolean; error?: string } | null;
@@ -16,18 +17,23 @@ const addSchema = z.object({
   displayName: z.string().min(1, '請輸入顯示名稱').max(30),
   fcuNid: z.string().regex(/^[A-Za-z]\d{7}$/, '學號格式錯誤（例：D1363482）'),
   fcuPassword: z.string().min(1, '請輸入 FCU 密碼'),
+  vaultId: z.string().optional(),
 });
 
 export async function addFcuAccount(_prev: FormState, formData: FormData): Promise<FormState> {
+  // Only the admin can create accounts (and choose which vault they land in).
+  await requireAdmin();
+
   const parsed = addSchema.safeParse({
     displayName: formData.get('displayName'),
     fcuNid: formData.get('fcuNid'),
     fcuPassword: formData.get('fcuPassword'),
+    vaultId: formData.get('vaultId') ?? undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? '輸入錯誤' };
   }
-  const { displayName, fcuNid, fcuPassword } = parsed.data;
+  const { displayName, fcuNid, fcuPassword, vaultId } = parsed.data;
 
   const enc = encryptCredential(fcuPassword);
 
@@ -44,6 +50,7 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
     ciphertext: enc.ciphertext,
     authTag: enc.authTag,
     sortOrder: existing.length,
+    vaultId: vaultId && vaultId.length > 0 ? vaultId : null,
     createdAt: new Date(),
   });
 
@@ -52,23 +59,8 @@ export async function addFcuAccount(_prev: FormState, formData: FormData): Promi
   redirect('/');
 }
 
-export async function setAccountHidden(id: string, hidden: boolean) {
-  const [acc] = await db
-    .select({ displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })
-    .from(fcuAccounts)
-    .where(eq(fcuAccounts.id, id))
-    .limit(1);
-  await db.update(fcuAccounts).set({ isHidden: hidden }).where(eq(fcuAccounts.id, id));
-  if (acc) {
-    await logActivity(
-      'account_update',
-      `${hidden ? '隱藏' : '取消隱藏'}帳號：${acc.displayName}（${acc.fcuNid}）`,
-    );
-  }
-  revalidatePath('/');
-}
-
 export async function deleteFcuAccount(id: string) {
+  await requireAdmin();
   const [acc] = await db
     .select({ displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })
     .from(fcuAccounts)

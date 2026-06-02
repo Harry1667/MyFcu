@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { accountGroups } from '@/lib/db/schema';
+import { requireAdmin } from '@/lib/auth-guard';
 import { logActivity } from '@/lib/activity-log';
 
 export type GroupFormState = { ok: boolean; error?: string } | null;
@@ -26,6 +27,7 @@ export async function createGroup(
   _prev: GroupFormState,
   formData: FormData,
 ): Promise<GroupFormState> {
+  await requireAdmin();
   const p = parse(formData);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? '輸入錯誤' };
 
@@ -48,6 +50,7 @@ export async function updateGroup(
   _prev: GroupFormState,
   formData: FormData,
 ): Promise<GroupFormState> {
+  await requireAdmin();
   const p = parse(formData);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? '輸入錯誤' };
 
@@ -62,6 +65,7 @@ export async function updateGroup(
 }
 
 export async function deleteGroup(id: string) {
+  await requireAdmin();
   const [g] = await db
     .select({ name: accountGroups.name })
     .from(accountGroups)
@@ -79,6 +83,7 @@ export async function listGroups() {
 
 /** Move a group up or down one slot; renormalises every sortOrder to its index. */
 export async function moveGroup(id: string, dir: 'up' | 'down') {
+  await requireAdmin();
   const groups = await db
     .select({ id: accountGroups.id })
     .from(accountGroups)

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clockinLogs, fcuAccounts } from '@/lib/db/schema';
 import { decryptCredential } from '@/lib/crypto/encryption';
+import { canAccessVault } from '@/lib/auth-guard';
 import { CookieJar, extractSetCookies, parseHidden, FCU_UA as UA } from '@/lib/fcu/session';
 
 const LOGIN_URL = 'https://signin.fcu.edu.tw/clockin/login.aspx';
@@ -61,6 +62,9 @@ async function runVerify(accountId: string): Promise<VerifyResult> {
     .where(eq(fcuAccounts.id, accountId))
     .limit(1);
   if (!acc) return { ok: false, verified: false, message: '找不到帳號' };
+  if (!(await canAccessVault(acc.vaultId))) {
+    return { ok: false, verified: false, message: '無權限存取此帳號' };
+  }
 
   let password: string;
   try {

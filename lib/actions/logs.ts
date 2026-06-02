@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { activityLogs, clockinLogs } from '@/lib/db/schema';
+import { requireAdmin } from '@/lib/auth-guard';
 import { logActivity } from '@/lib/activity-log';
 
 export type LogEntry = {
@@ -43,11 +44,13 @@ export async function logScanAttempts(
 }
 
 export async function clearLogs() {
+  await requireAdmin();
   await db.delete(clockinLogs);
   revalidatePath('/logs');
 }
 
 export async function clearActivity() {
+  await requireAdmin();
   await db.delete(activityLogs);
   revalidatePath('/logs');
 }

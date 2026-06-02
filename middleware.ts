@@ -1,12 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { expectedToken, SITE_AUTH_COOKIE } from '@/lib/site-pin';
+import { ADMIN_COOKIE, VAULT_COOKIE, isAdminCookie } from '@/lib/vaults';
 
 export async function middleware(req: NextRequest) {
-  const token = await expectedToken();
-  if (!token) return NextResponse.next(); // PIN gate disabled
   if (req.nextUrl.pathname === '/unlock') return NextResponse.next();
 
-  if (req.cookies.get(SITE_AUTH_COOKIE)?.value === token) return NextResponse.next();
+  // Admin sees everything.
+  if (await isAdminCookie(req.cookies.get(ADMIN_COOKIE)?.value)) return NextResponse.next();
+
+  // Any non-empty unlocked-vaults cookie gets through; the dashboard does the
+  // real DB-backed check (edge middleware can't read the DB) and bounces back
+  // to /unlock if nothing actually matched.
+  const vaultCookie = req.cookies.get(VAULT_COOKIE)?.value;
+  if (vaultCookie && vaultCookie.length > 0) return NextResponse.next();
 
   const url = req.nextUrl.clone();
   url.pathname = '/unlock';

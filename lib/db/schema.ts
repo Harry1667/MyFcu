@@ -8,9 +8,23 @@ export const fcuAccounts = sqliteTable('fcu_accounts', {
   ciphertext: blob('ciphertext', { mode: 'buffer' }).notNull(),
   authTag: blob('auth_tag', { mode: 'buffer' }).notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
-  // UI-level privacy: hidden accounts are filtered out of the dashboard unless
-  // the visitor has presented the reveal code (see lib/hidden-accounts.ts).
+  // Deprecated: superseded by the vault gate below. Kept as a dead column so
+  // the 0007 migration stays purely additive (no destructive drop on prod).
   isHidden: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
+  // Password vault this account belongs to. NULL = unassigned: only the admin
+  // sees it until it's placed in a vault. See lib/vaults.ts for the gate.
+  vaultId: text('vault_id'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// A password-protected "分檔". Visitors who enter a vault's password see only
+// that vault's accounts (view + clock-in). UI-level gate, not encryption: the
+// passToken is sha256(`${password}:${AUTH_SECRET}`) — never the plaintext.
+export const vaults = sqliteTable('vaults', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  passToken: text('pass_token').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
@@ -55,6 +69,9 @@ export const activityLogs = sqliteTable(
         'group_create',
         'group_update',
         'group_delete',
+        'vault_create',
+        'vault_update',
+        'vault_delete',
       ],
     }).notNull(),
     summary: text('summary').notNull(),
@@ -65,6 +82,7 @@ export const activityLogs = sqliteTable(
 );
 
 export type FcuAccount = typeof fcuAccounts.$inferSelect;
+export type Vault = typeof vaults.$inferSelect;
 export type AccountGroup = typeof accountGroups.$inferSelect;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type NewFcuAccount = typeof fcuAccounts.$inferInsert;

@@ -2,11 +2,13 @@ import { desc } from 'drizzle-orm';
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { activityLogs, clockinLogs } from '@/lib/db/schema';
+import { requireAdmin } from '@/lib/auth-guard';
 import { LogsClient } from './logs-client';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LogsPage() {
+  await requireAdmin();
   const [rows, activityRows] = await Promise.all([
     db.select().from(clockinLogs).orderBy(desc(clockinLogs.createdAt)).limit(500),
     db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(500),

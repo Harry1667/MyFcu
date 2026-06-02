@@ -50,6 +50,13 @@
       "when": 1780383167218,
       "tag": "0006_heavy_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1780399472625,
+      "tag": "0007_organic_midnight",
+      "breakpoints": true
     }
   ]
 }

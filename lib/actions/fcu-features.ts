@@ -1,5 +1,9 @@
 'use server';
 
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { fcuAccounts } from '@/lib/db/schema';
+import { canAccessVault } from '@/lib/auth-guard';
 import { loadAccountWithPassword } from '@/lib/fcu/account';
 import { fetchTimetable } from '@/lib/fcu/timetable';
 import { fetchStudentCard, fetchStudentCardQr } from '@/lib/fcu/card';
@@ -19,10 +23,22 @@ import type {
  * outcome into a FeatureResult so the client always gets data-or-error, never
  * a thrown exception. The decrypted password stays inside this server module.
  */
+/** Is the current request allowed to touch this account (admin or its vault)? */
+async function canAccess(accountId: string): Promise<boolean> {
+  const [a] = await db
+    .select({ vaultId: fcuAccounts.vaultId })
+    .from(fcuAccounts)
+    .where(eq(fcuAccounts.id, accountId))
+    .limit(1);
+  if (!a) return false;
+  return canAccessVault(a.vaultId);
+}
+
 async function run<T>(
   accountId: string,
   fn: (acc: FcuCredential) => Promise<T>,
 ): Promise<FeatureResult<T>> {
+  if (!(await canAccess(accountId))) return { ok: false, error: '無權限存取此帳號' };
   const acc = await loadAccountWithPassword(accountId);
   if (!acc) return { ok: false, error: '找不到帳號或解密失敗' };
   try {
@@ -55,6 +71,7 @@ export async function getStudentCardQr(
 export async function checkAccountHealth(
   accountId: string,
 ): Promise<'valid' | 'invalid' | 'error'> {
+  if (!(await canAccess(accountId))) return 'error';
   const acc = await loadAccountWithPassword(accountId);
   if (!acc) return 'error';
   try {

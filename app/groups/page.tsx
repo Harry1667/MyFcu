@@ -1,11 +1,13 @@
 import { asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { accountGroups, fcuAccounts } from '@/lib/db/schema';
+import { requireAdmin } from '@/lib/auth-guard';
 import { GroupsManager } from './groups-client';
 
 export const dynamic = 'force-dynamic';
 
 export default async function GroupsPage() {
+  await requireAdmin();
   const [accounts, groups] = await Promise.all([
     db
       .select({ id: fcuAccounts.id, displayName: fcuAccounts.displayName, fcuNid: fcuAccounts.fcuNid })

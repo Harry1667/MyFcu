@@ -2,13 +2,14 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { deleteFcuAccount, setAccountHidden } from '@/lib/actions/accounts';
-import { hideAgain } from '@/lib/actions/reveal';
+import { deleteFcuAccount } from '@/lib/actions/accounts';
+import { assignAccountVault, lockAll } from '@/lib/actions/vaults';
 import { checkAccountHealth } from '@/lib/actions/fcu-features';
 
 type Health = 'checking' | 'valid' | 'invalid' | 'error';
 
-type Account = { id: string; displayName: string; fcuNid: string; isHidden: boolean };
+type Account = { id: string; displayName: string; fcuNid: string; vaultId: string | null };
+type Vault = { id: string; name: string };
 type Group = { id: string; name: string; memberIds: string[] };
 
 function avatarColor(seed: string) {
@@ -18,23 +19,26 @@ function avatarColor(seed: string) {
 }
 
 export function DashboardClient({
+  isAdmin,
   accounts,
+  vaults,
   groups,
-  revealed,
-  gateEnabled,
-  hiddenCount,
 }: {
+  isAdmin: boolean;
   accounts: Account[];
+  vaults: Vault[];
   groups: Group[];
-  revealed: boolean;
-  gateEnabled: boolean;
-  hiddenCount: number;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manageMode, setManageMode] = useState(false);
   const [pending, startTransition] = useTransition();
   const [health, setHealth] = useState<Record<string, Health>>({});
   const [checking, setChecking] = useState(false);
+
+  const vaultName = useMemo(() => {
+    const m = new Map(vaults.map((v) => [v.id, v.name]));
+    return (id: string | null) => (id ? m.get(id) ?? null : null);
+  }, [vaults]);
 
   const runHealthCheck = () => {
     if (checking) return;
@@ -61,7 +65,6 @@ export function DashboardClient({
     else setSelected(new Set(accounts.map((a) => a.id)));
   };
 
-  // A group's members, minus any deleted accounts.
   const liveMembers = (g: Group) => g.memberIds.filter((id) => accounts.some((a) => a.id === id));
   const isGroupActive = (g: Group) => {
     const m = liveMembers(g);
@@ -84,9 +87,9 @@ export function DashboardClient({
     });
   };
 
-  const handleToggleHidden = (acc: Account) => {
+  const handleAssign = (id: string, vaultId: string) => {
     startTransition(async () => {
-      await setAccountHidden(acc.id, !acc.isHidden);
+      await assignAccountVault(id, vaultId || null);
     });
   };
 
@@ -95,18 +98,29 @@ export function DashboardClient({
     selectedIds.length === 0 ? '#' : `/clockin/class?ids=${selectedIds.join(',')}`;
   const startDisabled = selectedIds.length === 0 || manageMode;
 
+  const groupsWithMembers = groups.filter((g) => liveMembers(g).length > 0);
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-end justify-between pt-3">
-        <h1 className="ios-title">逢甲打卡</h1>
+        <div>
+          <h1 className="ios-title">逢甲打卡</h1>
+          {!isAdmin && vaults.length > 0 && (
+            <p className="mt-0.5 text-[13px] text-[--label-2]">
+              分檔：{vaults.map((v) => v.name).join('、')}
+            </p>
+          )}
+          {isAdmin && <p className="mt-0.5 text-[13px] text-[--tint]">管理員模式</p>}
+        </div>
         <div className="flex items-center gap-4 pb-1 text-[15px] text-[--tint]">
           {accounts.length > 0 && !manageMode && (
             <button type="button" onClick={runHealthCheck} disabled={checking}>
               {checking ? '檢查中…' : '檢查'}
             </button>
           )}
-          <Link href="/logs">紀錄</Link>
-          {accounts.length > 0 && (
+          {isAdmin && <Link href="/vaults">分檔</Link>}
+          {isAdmin && <Link href="/logs">紀錄</Link>}
+          {isAdmin && accounts.length > 0 && (
             <button type="button" onClick={() => setManageMode((m) => !m)} className="font-medium">
               {manageMode ? '完成' : '編輯'}
             </button>
@@ -114,45 +128,38 @@ export function DashboardClient({
         </div>
       </header>
 
-      {accounts.length > 0 && !manageMode && (
+      {accounts.length > 0 && !manageMode && groupsWithMembers.length > 0 && (
         <section className="mt-6">
           <div className="ios-section flex items-end justify-between">
             <span>課程群組</span>
-            <Link href="/groups" className="text-[--tint]">
-              管理
-            </Link>
+            {isAdmin && (
+              <Link href="/groups" className="text-[--tint]">
+                管理
+              </Link>
+            )}
           </div>
-          {groups.length === 0 ? (
-            <Link
-              href="/groups"
-              className="ios-card flex items-center gap-2 px-4 py-3 text-[15px] text-[--tint]"
-            >
-              ＋ 建立課程群組，一鍵選取整組同學
-            </Link>
-          ) : (
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-              {groups.map((g) => {
-                const active = isGroupActive(g);
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => selectGroup(g)}
-                    className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
-                    style={{
-                      backgroundColor: active ? 'var(--tint)' : 'var(--bg-elevated)',
-                      color: active ? '#fff' : 'var(--label)',
-                    }}
-                  >
-                    {g.name}
-                    <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-[--label-3]'}>
-                      {liveMembers(g).length}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+            {groupsWithMembers.map((g) => {
+              const active = isGroupActive(g);
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => selectGroup(g)}
+                  className="shrink-0 rounded-full px-4 py-2 text-[15px] font-medium transition active:opacity-70"
+                  style={{
+                    backgroundColor: active ? 'var(--tint)' : 'var(--bg-elevated)',
+                    color: active ? '#fff' : 'var(--label)',
+                  }}
+                >
+                  {g.name}
+                  <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-[--label-3]'}>
+                    {liveMembers(g).length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -167,12 +174,18 @@ export function DashboardClient({
         </div>
 
         {accounts.length === 0 ? (
-          <Link
-            href="/accounts/new"
-            className="ios-card flex items-center justify-center gap-2 px-4 py-8 text-[17px] text-[--tint]"
-          >
-            ＋ 新增第一個 FCU 帳號
-          </Link>
+          isAdmin ? (
+            <Link
+              href="/accounts/new"
+              className="ios-card flex items-center justify-center gap-2 px-4 py-8 text-[17px] text-[--tint]"
+            >
+              ＋ 新增第一個 FCU 帳號
+            </Link>
+          ) : (
+            <div className="ios-card px-4 py-8 text-center text-[15px] text-[--label-2]">
+              這個分檔還沒有帳號。
+            </div>
+          )
         ) : (
           <>
             <ul className="ios-card">
@@ -180,9 +193,7 @@ export function DashboardClient({
                 const isSel = selected.has(a.id);
                 return (
                   <li key={a.id} className="relative flex items-center">
-                    {i > 0 && (
-                      <span className="ios-divider absolute top-0 right-0 left-[60px]" />
-                    )}
+                    {i > 0 && <span className="ios-divider absolute top-0 right-0 left-[60px]" />}
                     {manageMode ? (
                       <>
                         <button
@@ -190,24 +201,30 @@ export function DashboardClient({
                           onClick={() => handleDelete(a)}
                           disabled={pending}
                           aria-label={`刪除 ${a.displayName}`}
-                          className="flex flex-1 items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
+                          className="flex items-center gap-3 py-2 pl-4 text-left active:bg-[--fill]"
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[--danger] text-sm font-bold text-white">
                             −
                           </span>
                           <Avatar acc={a} />
+                        </button>
+                        <div className="min-w-0 flex-1 py-2 pl-3">
                           <Name acc={a} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleHidden(a)}
-                          disabled={pending}
-                          aria-label={a.isHidden ? `取消隱藏 ${a.displayName}` : `隱藏 ${a.displayName}`}
-                          className="flex shrink-0 items-center gap-1.5 self-stretch pr-4 pl-3 text-[15px] text-[--tint] active:bg-[--fill]"
-                        >
-                          {a.isHidden ? <EyeOff /> : <Eye />}
-                          {a.isHidden ? '取消隱藏' : '隱藏'}
-                        </button>
+                          <select
+                            value={a.vaultId ?? ''}
+                            onChange={(e) => handleAssign(a.id, e.target.value)}
+                            disabled={pending}
+                            className="mt-1 w-full rounded-md bg-[--fill] px-2 py-1 text-[12px] text-[--label] outline-none"
+                            aria-label={`${a.displayName} 的分檔`}
+                          >
+                            <option value="">未分檔（只有管理員看得到）</option>
+                            {vaults.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </>
                     ) : (
                       <button
@@ -235,7 +252,7 @@ export function DashboardClient({
                           )}
                         </span>
                         <Avatar acc={a} />
-                        <Name acc={a} />
+                        <Name acc={a} vault={isAdmin ? vaultName(a.vaultId) : null} />
                       </button>
                     )}
                     {!manageMode && health[a.id] && <HealthBadge status={health[a.id]} />}
@@ -254,7 +271,7 @@ export function DashboardClient({
               })}
             </ul>
 
-            {!manageMode && (
+            {isAdmin && !manageMode && (
               <Link
                 href="/accounts/new"
                 className="ios-card mt-4 flex items-center gap-2 px-4 py-3 text-[17px] text-[--tint]"
@@ -268,27 +285,14 @@ export function DashboardClient({
           </>
         )}
 
-        {!manageMode && gateEnabled && (
-          <div className="mt-5 flex justify-center">
-            {revealed ? (
-              <form action={hideAgain}>
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 text-[14px] text-[--label-2]"
-                >
-                  <Eye />
-                  已顯示隱藏帳號{hiddenCount > 0 ? `（${hiddenCount}）` : ''} · 結束顯示
-                </button>
-              </form>
-            ) : (
-              <Link
-                href="/reveal"
-                className="flex items-center gap-1.5 text-[14px] text-[--label-2]"
-              >
-                <EyeOff />
-                顯示隱藏帳號
-              </Link>
-            )}
+        {!manageMode && (
+          <div className="mt-6 flex flex-col items-center gap-2 text-[14px] text-[--label-2]">
+            <Link href="/unlock">輸入其他分檔密碼</Link>
+            <form action={lockAll}>
+              <button type="submit" className="text-[--label-3]">
+                鎖定離開
+              </button>
+            </form>
           </div>
         )}
       </section>
@@ -322,44 +326,26 @@ function Avatar({ acc }: { acc: Account }) {
   );
 }
 
-function Name({ acc }: { acc: Account }) {
+function Name({ acc, vault }: { acc: Account; vault?: string | null }) {
   return (
     <span className="min-w-0 flex-1">
       <span className="flex items-center gap-1.5 truncate text-[17px] text-[--label]">
         {acc.displayName}
-        {acc.isHidden && <LockBadge />}
+        {vault !== undefined && <VaultBadge name={vault} />}
       </span>
       <span className="block font-mono text-[12px] text-[--label-2]">{acc.fcuNid}</span>
     </span>
   );
 }
 
-function LockBadge() {
+function VaultBadge({ name }: { name: string | null }) {
   return (
     <span
-      title="已隱藏帳號"
-      className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full bg-[--fill] px-1.5 text-[11px] text-[--label-2]"
+      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[--fill] px-1.5 text-[11px] text-[--label-2]"
+      title={name ? `分檔：${name}` : '未分檔'}
     >
-      <EyeOff />
+      {name ?? '未分檔'}
     </span>
-  );
-}
-
-function Eye() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8Z" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function EyeOff() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M6.2 6.3a2.5 2.5 0 0 0 3.5 3.5M3.5 4.4C1.9 5.5 1 8 1 8s2.5 4.5 7 4.5c1 0 1.9-.2 2.7-.5M6.5 3.6A6.6 6.6 0 0 1 8 3.5c4.5 0 7 4.5 7 4.5a13 13 0 0 1-1.8 2.3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <path d="M2 2l12 12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
   );
 }
 
