@@ -44,6 +44,21 @@ function detectInAppBrowser(): boolean {
   return /FBAN|FBAV|Instagram|Line\/|Messenger|MicroMessenger|Twitter|; wv\)|KAKAOTALK/i.test(ua);
 }
 
+// iOS Safari has no native BarcodeDetector, so html5-qrcode falls back to a
+// pure-JS decode of the live video frames — which reliably fails on QRs shown
+// on a teacher's screen/projector (glare + distance). The still-photo path
+// (scanFile) decodes a full-res capture and is the only dependable route on
+// iPhone, so we promote it to the primary action there. iPadOS 13+ reports as
+// "Macintosh", so also treat a touch-capable Mac as iOS.
+function detectIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (ua.includes('Macintosh') && typeof document !== 'undefined' && 'ontouchend' in document)
+  );
+}
+
 export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [phase, setPhase] = useState<Phase>('preflight');
   const [results, setResults] = useState<Result[]>([]);
@@ -55,7 +70,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [manualValue, setManualValue] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [inApp, setInApp] = useState(false);
-  useEffect(() => setInApp(detectInAppBrowser()), []);
+  const [isIOS, setIsIOS] = useState(false);
+  useEffect(() => {
+    setInApp(detectInAppBrowser());
+    setIsIOS(detectIOS());
+  }, []);
   // Live camera controls discovered from the running track (help with hard
   // screen/projector QRs): optical zoom + torch.
   const [zoom, setZoom] = useState<{ min: number; max: number; step: number; value: number } | null>(
@@ -377,6 +396,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setPhase('preflight');
   };
 
+  // On iPhone the live scanner can't read a screen QR, so the still-photo
+  // capture is the real action — show it as the filled primary button while
+  // we're still on the preflight screen.
+  const photoPrimary = isIOS && phase === 'preflight';
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
       <header className="flex items-center justify-between pt-2">
@@ -394,6 +418,13 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
           ⚠️ 你在 App 內建瀏覽器（LINE／IG／FB…）開啟，相機常常打不開。
           建議用 <b>Safari / Chrome</b> 開這個網址；或直接用下方的「📸 拍照辨識」，不需要開相機權限。
+        </div>
+      )}
+
+      {isIOS && !inApp && phase === 'preflight' && (
+        <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
+          📱 iPhone 對著螢幕／投影的 QR，<b>即時掃描常常掃不到</b>（Safari 沒有原生掃碼，只能用網頁慢慢解）。
+          請直接用下方的 <b>📸 拍照打卡</b>，或用 iPhone 內建相機掃完再「手動貼上」，都比即時掃描穩。
         </div>
       )}
 
@@ -455,11 +486,18 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
       {/* Hidden element used by scanFile() for the photo fallback. */}
       <div id="qr-file-reader" className="hidden" />
 
-      {/* Fallbacks for when live scanning off a screen won't lock on. */}
+      {/* Fallbacks for when live scanning off a screen won't lock on. On iOS
+          this photo button is the primary action (see photoPrimary). */}
       {(phase === 'preflight' || phase === 'scan') && (
-        <div className="mt-4 space-y-2">
-          <label className="ios-card block w-full cursor-pointer py-3 text-center text-[15px] font-medium text-[--tint] active:opacity-70">
-            📸 拍照辨識（免相機權限，最穩）
+        <div className={`${photoPrimary ? 'mt-6' : 'mt-4'} space-y-2`}>
+          <label
+            className={
+              photoPrimary
+                ? 'ios-btn flex w-full cursor-pointer items-center justify-center gap-2'
+                : 'ios-card block w-full cursor-pointer py-3 text-center text-[15px] font-medium text-[--tint] active:opacity-70'
+            }
+          >
+            {photoPrimary ? '📸 拍照打卡（iPhone 最準）' : '📸 拍照辨識（免相機權限，最穩）'}
             <input
               type="file"
               accept="image/*"
@@ -479,7 +517,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
               onClick={() => setManualOpen(true)}
               className="w-full py-1 text-center text-[13px] text-[--label-2]"
             >
-              掃不到？手動貼上 QR 內容
+              {isIOS ? '用 iPhone 內建相機掃完，手動貼上' : '掃不到？手動貼上 QR 內容'}
             </button>
           ) : (
             <div className="ios-card space-y-2 p-3">
@@ -503,7 +541,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         </div>
       )}
 
-      {phase === 'preflight' && (
+      {phase === 'preflight' && !isIOS && (
         <div className="mt-6 space-y-3">
           <div className="ios-card flex flex-col items-center gap-2 py-14 text-[--label-2]">
             <span className="text-4xl">📷</span>
@@ -513,6 +551,16 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
             啟用相機
           </button>
         </div>
+      )}
+
+      {phase === 'preflight' && isIOS && (
+        <button
+          type="button"
+          onClick={startCamera}
+          className="mt-3 w-full py-2 text-center text-[14px] text-[--label-2] active:opacity-60"
+        >
+          還是想試即時掃描？開啟相機
+        </button>
       )}
 
       {phase !== 'preflight' && phase !== 'scan' && (
