@@ -126,6 +126,15 @@ export function IconWarning(p: IconProps) {
   );
 }
 
+export function IconCheckCircle(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+    </Svg>
+  );
+}
+
 export function IconUserPlus(p: IconProps) {
   return (
     <Svg {...p}>

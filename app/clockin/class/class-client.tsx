@@ -7,6 +7,7 @@ import { verifyAccount } from '@/lib/actions/verify';
 import {
   IconCamera,
   IconCameraSwitch,
+  IconCheckCircle,
   IconChevronLeft,
   IconFlashlight,
   IconWarning,
@@ -74,6 +75,11 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const [scannedToken, setScannedToken] = useState<string | null>(null);
   const scannerRef = useRef<import('html5-qrcode').Html5Qrcode | null>(null);
   const handledRef = useRef(false);
+  // Tokens we've already pushed through postToFcu. Guards against the
+  // scan-success effect re-firing for the same QR (which once produced ~26
+  // duplicate clock-ins of a single token, ~1.5s apart). Only an explicit
+  // "再掃一次"/開相機 clears this, so an intentional re-scan still works.
+  const postedTokenRef = useRef<string | null>(null);
   const [manualValue, setManualValue] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [inApp, setInApp] = useState(false);
@@ -250,9 +256,13 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     [accounts],
   );
 
-  // When scannedToken is set, stop scanner then post.
+  // When scannedToken is set, stop scanner then post — but only ONCE per token.
+  // Without this guard the effect could re-run for an already-submitted token
+  // (its deps include postToFcu) and resubmit the same QR in a tight loop.
   useEffect(() => {
     if (!scannedToken) return;
+    if (postedTokenRef.current === scannedToken) return;
+    postedTokenRef.current = scannedToken;
     void (async () => {
       await stopScanner();
       try {
@@ -364,6 +374,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   const startCamera = () => {
     setError(null);
     handledRef.current = false;
+    postedTokenRef.current = null;
     setScannedToken(null);
     setPhase('scan');
   };
@@ -393,6 +404,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
   const rescan = () => {
     handledRef.current = false;
+    postedTokenRef.current = null;
     setScannedToken(null);
     setResults([]);
     setError(null);
@@ -582,6 +594,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
       {phase !== 'preflight' && phase !== 'scan' && (
         <>
+          {phase === 'processing' && (
+            <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[--fill] px-4 py-3 text-[15px] text-[--label]">
+              <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[--label-3] border-t-[--tint]" />
+              送出並向 FCU 確認中，請稍候不要重複拍照…
+            </div>
+          )}
           {scannedToken && (
             <div className="mt-4 rounded-xl bg-[--fill] px-3 py-2 text-[12px]">
               <span className="text-[--label-2]">QR：</span>
@@ -625,12 +643,23 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
       {phase === 'done' && (
         <div className="mt-6 space-y-3">
+          {results.length > 0 && results.every((r) => r.status === 'verified') && (
+            <div className="flex items-center gap-3 rounded-2xl bg-[color-mix(in_srgb,var(--tint)_14%,transparent)] px-4 py-4 text-[--tint]">
+              <IconCheckCircle size={28} className="shrink-0" />
+              <div>
+                <div className="text-[17px] font-semibold">打卡完成</div>
+                <div className="text-[13px] opacity-85">
+                  已向 FCU 確認，{results.length} 個帳號今天都查到打卡紀錄，可以關掉了。
+                </div>
+              </div>
+            </div>
+          )}
           {results.some((r) => r.status === 'unverified' || r.status === 'failed') && (
             <div className="flex items-start gap-2 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label-2]">
               <IconWarning size={18} className="mt-0.5 shrink-0 text-[--amber]" />
               <span>
-                有未確認 / 失敗的帳號。可以到{' '}
-                <Link href="/logs" className="font-medium text-[--tint]">紀錄</Link> 看詳細，或開 FCU app 自己確認。
+                有帳號<b>還沒在 FCU 查到今天的打卡紀錄</b>，可能沒打成功。請到{' '}
+                <Link href="/logs" className="font-medium text-[--tint]">紀錄</Link> 看詳細，或開 FCU app 自己確認後再補打。
               </span>
             </div>
           )}
@@ -653,13 +682,16 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 }
 
 function StatusBadge({ status }: { status: ResultStatus | 'waiting' }) {
+  // Green (--tint) is reserved for 'verified' — i.e. FCU's record page actually
+  // shows today's clock-in. Everything before that (sent / verifying) is blue
+  // "in progress", so we never flash success before the backend confirms.
   const map: Record<ResultStatus | 'waiting', { color: string; label: string }> = {
     waiting: { color: 'var(--label-2)', label: '等待' },
     pending: { color: '#0a84ff', label: '傳送中' },
-    sent: { color: 'var(--tint)', label: '已送出' },
+    sent: { color: '#0a84ff', label: '已送出·確認中' },
     failed: { color: 'var(--danger)', label: '失敗' },
-    verifying: { color: '#0a84ff', label: '驗證中…' },
-    verified: { color: 'var(--tint)', label: '已記錄' },
+    verifying: { color: '#0a84ff', label: '向 FCU 確認中…' },
+    verified: { color: 'var(--tint)', label: 'FCU 已記錄' },
     unverified: { color: 'var(--amber)', label: '未確認' },
   };
   const s = map[status];
