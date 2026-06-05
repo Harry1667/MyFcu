@@ -20,7 +20,12 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Gate everything except Next internals, the manifest, and icon assets so the
-  // unlock page can still render and PWA metadata stays reachable.
-  matcher: ['/((?!_next/|favicon.ico|manifest.webmanifest|icon-.*\\.png|apple-icon).*)'],
+  // Gate everything except Next internals, the manifest, icon assets, and the
+  // QR decoder's wasm so the unlock page can still render, PWA metadata stays
+  // reachable, and the decoder always loads (it's non-sensitive static content;
+  // gating it risks the fetch getting a 307→HTML redirect that breaks WASM
+  // instantiation).
+  matcher: [
+    '/((?!_next/|zxing/|favicon.ico|manifest.webmanifest|icon-.*\\.png|apple-icon).*)',
+  ],
 };
