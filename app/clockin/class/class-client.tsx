@@ -87,6 +87,9 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   useEffect(() => {
     setInApp(detectInAppBrowser());
     setIsIOS(detectIOS());
+    // Warm the ZXing-WASM decoder so the first photo/live decode isn't blocked
+    // on the ~940KB wasm fetch + compile.
+    void import('@/lib/qr/decode').then((m) => m.warmupDecoder());
   }, []);
   // Live camera controls discovered from the running track (help with hard
   // screen/projector QRs): optical zoom + torch.
@@ -131,17 +134,12 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
     setError(null);
     await stopScanner();
     try {
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
-      const tmp = new Html5Qrcode('qr-file-reader', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        verbose: false,
-      });
-      const decoded = await tmp.scanFile(file, false);
-      try {
-        await tmp.clear();
-      } catch {
-        /* ignore */
+      const { decodeImageFile } = await import('@/lib/qr/decode');
+      const decoded = await decodeImageFile(file);
+      if (!decoded) {
+        setError('照片裡找不到 QR，可以再拍清楚一點（拉近、對焦、避免反光），或直接貼上掃到的內容。');
+        setPhase('preflight');
+        return;
       }
       handledRef.current = true;
       setScannedToken(decoded);
@@ -278,6 +276,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
   useEffect(() => {
     if (phase !== 'scan') return;
     let cancelled = false;
+    let wasmTimer: ReturnType<typeof setInterval> | undefined;
 
     (async () => {
       try {
@@ -337,6 +336,45 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
         } catch {
           /* capabilities not available */
         }
+
+        // Parallel high-accuracy decode loop. html5-qrcode runs the camera and,
+        // on Android, its native BarcodeDetector. But on iOS Safari its JS
+        // decoder can't read FCU's dense ~285-char-JWT QR — so we ALSO sample
+        // the live <video> into a canvas and run the ZXing-WASM decoder, which
+        // can. Whichever decoder locks on first sets the token (handledRef
+        // dedups). ~350ms cadence keeps CPU sane while staying responsive.
+        let busy = false;
+        let videoEl: HTMLVideoElement | null = null;
+        let canvas: HTMLCanvasElement | null = null;
+        const tick = async () => {
+          if (cancelled || handledRef.current || busy) return;
+          videoEl ??= document.querySelector<HTMLVideoElement>('#qr-reader video');
+          const v = videoEl;
+          if (!v || v.videoWidth === 0) return;
+          busy = true;
+          try {
+            if (!canvas) canvas = document.createElement('canvas');
+            canvas.width = v.videoWidth;
+            canvas.height = v.videoHeight;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return;
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const { decodeImageData } = await import('@/lib/qr/decode');
+            const text = await decodeImageData(img);
+            if (text && !cancelled && !handledRef.current) {
+              handledRef.current = true;
+              setScannedToken(text);
+            }
+          } catch {
+            /* ignore a bad frame; the next tick retries */
+          } finally {
+            busy = false;
+          }
+        };
+        wasmTimer = setInterval(() => {
+          void tick();
+        }, 350);
       } catch (e) {
         if (!cancelled) {
           const msg =
@@ -353,6 +391,7 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
     return () => {
       cancelled = true;
+      if (wasmTimer) clearInterval(wasmTimer);
       setZoom(null);
       setTorch({ available: false, on: false });
       const s = scannerRef.current;
@@ -448,8 +487,8 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
 
       {isIOS && !inApp && phase === 'preflight' && (
         <div className="mt-3 rounded-xl bg-[--fill] px-4 py-3 text-[13px] text-[--label]">
-          iPhone 對著螢幕／投影的 QR，<b>即時掃描常常掃不到</b>（Safari 沒有原生掃碼，只能用網頁慢慢解）。
-          請直接用下方的 <b>拍照打卡</b>，或用 iPhone 內建相機掃完再「手動貼上」，都比即時掃描穩。
+          iPhone 對著螢幕／投影的 QR，建議直接用下方的 <b>拍照打卡</b> 最穩。
+          即時掃描也可以用，但距離較遠或反光時，拍照的成功率更高。
         </div>
       )}
 
@@ -510,9 +549,6 @@ export function ClassClockinClient({ accounts }: { accounts: Account[] }) {
           對不到焦？用縮放拉近老師螢幕的 QR，或改用下方「拍照辨識」。
         </p>
       </div>
-
-      {/* Hidden element used by scanFile() for the photo fallback. */}
-      <div id="qr-file-reader" className="hidden" />
 
       {/* Fallbacks for when live scanning off a screen won't lock on. On iOS
           this photo button is the primary action (see photoPrimary). */}

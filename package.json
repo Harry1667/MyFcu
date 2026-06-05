@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "copy-qr-wasm": "mkdir -p public/zxing && cp node_modules/zxing-wasm/dist/reader/zxing_reader.wasm public/zxing/zxing_reader.wasm",
+    "prebuild": "mkdir -p public/zxing && cp node_modules/zxing-wasm/dist/reader/zxing_reader.wasm public/zxing/zxing_reader.wasm",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -19,7 +21,8 @@
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zxing-wasm": "2.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
